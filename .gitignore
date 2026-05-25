@@ -1,0 +1,21 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+build/
+dist/
+out/
+*.log
+.DS_Store
+.turbo/
+
+# Sui Move
+contracts/build/
+contracts/.coverage_map.mvcov
+contracts/.trace
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
