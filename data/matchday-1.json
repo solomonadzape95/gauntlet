@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "matchday": "Group Stage · Matchday 1",
+  "fixtures": [
+    { "home": "Brazil", "away": "Morocco", "score": "1-1" },
+    { "home": "France", "away": "Argentina", "score": "2-3" }
+  ],
+  "results": [
+    { "player_id": 0,  "name": "Vinicius Junior",     "stats": { "goals": 0, "assists": 0 },                         "hit_target": false, "verdict": "ELIMINATED · double-teamed all match, no big chances" },
+    { "player_id": 1,  "name": "Rodrygo",             "stats": { "shots_on_target": 3, "goals": 0 },                "hit_target": true,  "verdict": "SURVIVED · 3 SoT on the night" },
+    { "player_id": 2,  "name": "Casemiro",            "stats": { "tackles": 4, "pass_accuracy": 0.88 },             "hit_target": true,  "verdict": "SURVIVED · workhorse delivers" },
+    { "player_id": 3,  "name": "Marquinhos",          "stats": { "conceded": 1, "goals": 0 },                       "hit_target": false, "verdict": "ELIMINATED · conceded, did not score" },
+
+    { "player_id": 4,  "name": "Kylian Mbappé",       "stats": { "goals": 1 },                                       "hit_target": false, "verdict": "ELIMINATED · only one goal (needed two)" },
+    { "player_id": 5,  "name": "Antoine Griezmann",   "stats": { "goals": 0, "assists": 0 },                        "hit_target": false, "verdict": "ELIMINATED · dropped too deep, no final-third output" },
+    { "player_id": 6,  "name": "Aurélien Tchouaméni", "stats": { "tackles": 4, "pass_accuracy": 0.81 },             "hit_target": false, "verdict": "ELIMINATED · pass accuracy fell below 85% under Argentina press" },
+    { "player_id": 7,  "name": "William Saliba",      "stats": { "conceded": 3, "goals": 0 },                        "hit_target": false, "verdict": "ELIMINATED · France defense collapsed" },
+
+    { "player_id": 8,  "name": "Lionel Messi",        "stats": { "goals": 1, "assists": 1 },                        "hit_target": true,  "verdict": "SURVIVED · the magic man delivers" },
+    { "player_id": 9,  "name": "Julián Álvarez",      "stats": { "goals": 2 },                                       "hit_target": true,  "verdict": "SURVIVED · brace against France" },
+    { "player_id": 10, "name": "Alexis Mac Allister", "stats": { "tackles": 4, "pass_accuracy": 0.89 },             "hit_target": true,  "verdict": "SURVIVED · ran the midfield" },
+    { "player_id": 11, "name": "Cristian Romero",     "stats": { "conceded": 2, "goals": 0 },                        "hit_target": false, "verdict": "ELIMINATED · conceded twice" },
+
+    { "player_id": 12, "name": "Achraf Hakimi",       "stats": { "goals": 0, "assists": 1 },                        "hit_target": true,  "verdict": "SURVIVED · classic Hakimi overlap into assist" },
+    { "player_id": 13, "name": "Hakim Ziyech",        "stats": { "shots_on_target": 1, "goals": 0 },                "hit_target": false, "verdict": "ELIMINATED · subbed in the 65th, only 1 SoT" },
+    { "player_id": 14, "name": "Youssef En-Nesyri",   "stats": { "goals": 0 },                                       "hit_target": false, "verdict": "ELIMINATED · isolated up top" },
+    { "player_id": 15, "name": "Yassine Bono",        "stats": { "saves": 6, "conceded": 1 },                       "hit_target": true,  "verdict": "SURVIVED · six saves on the night" }
+  ],
+  "eliminated_player_ids": [0, 3, 4, 5, 6, 7, 11, 13, 14],
+  "survivor_player_ids":   [1, 2, 8, 9, 10, 12, 15]
+}
