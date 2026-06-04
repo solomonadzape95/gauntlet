@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "tournament": "FIFA World Cup 2026",
+  "matchday": "Group Stage · Matchday 1",
+  "ai_game_master": "claude-opus-4-7 (precomputed)",
+  "players": [
+    {
+      "id": 0,
+      "name": "Vinicius Junior",
+      "team": "Brazil",
+      "club": "Real Madrid",
+      "position": "LW",
+      "difficulty": "star",
+      "target": { "metric": "goals_or_assists", "threshold": 1, "human": "Score or assist" },
+      "ai_rationale": "Brazil's primary creator vs. Morocco's compact mid-block. Vini hits 1g+a in ~60% of starts against bottom-50% xGA defenses, but Morocco specifically suppresses 1v1 dribblers via early double-teams. Marginal pick."
+    },
+    {
+      "id": 1,
+      "name": "Rodrygo",
+      "team": "Brazil",
+      "club": "Real Madrid",
+      "position": "RW",
+      "difficulty": "regular",
+      "target": { "metric": "shots_on_target", "threshold": 2, "human": "At least 2 shots on target" },
+      "ai_rationale": "Rodrygo's shot map this season has been mid-range heavy. Two SoT is well within range against Morocco's deeper line, but he tends to fade if Brazil dominates possession early."
+    },
+    {
+      "id": 2,
+      "name": "Casemiro",
+      "team": "Brazil",
+      "club": "Man United",
+      "position": "DM",
+      "difficulty": "workhorse",
+      "target": { "metric": "tackles_and_passacc", "tackles_threshold": 3, "passacc_threshold": 0.85, "human": "3+ tackles and 85% passing" },
+      "ai_rationale": "The workhorse target. Casemiro averages 3.2 tackles vs. tier-1 opposition with 86% completion. Reliable floor; rarely sub'd in tight matches."
+    },
+    {
+      "id": 3,
+      "name": "Marquinhos",
+      "team": "Brazil",
+      "club": "PSG",
+      "position": "CB",
+      "difficulty": "defender",
+      "target": { "metric": "cleansheet_or_goal", "human": "Keep a clean sheet or score" },
+      "ai_rationale": "Defender's OR-clause target. Morocco's chance creation has been low this cycle, and Marquinhos is a real set-piece threat — he scored 3 in his last 12 internationals."
+    },
+
+    {
+      "id": 4,
+      "name": "Kylian Mbappé",
+      "team": "France",
+      "club": "Real Madrid",
+      "position": "ST",
+      "difficulty": "star",
+      "target": { "metric": "goals", "threshold": 2, "human": "Score 2 goals" },
+      "ai_rationale": "The brutal pick. Mbappé hits ≥2g in only ~22% of starts. Argentina's CB pairing is Romero+Otamendi — one of the few defenses that genuinely cuts off his diagonal runs. High ceiling, very high risk."
+    },
+    {
+      "id": 5,
+      "name": "Antoine Griezmann",
+      "team": "France",
+      "club": "Atlético Madrid",
+      "position": "AM",
+      "difficulty": "regular",
+      "target": { "metric": "goals_or_assists", "threshold": 1, "human": "Score or assist" },
+      "ai_rationale": "Griezmann's playmaker role makes 1g+a achievable (he hits it in ~55% of starts), but if Deschamps drops him deeper to control midfield, his final-third involvement collapses."
+    },
+    {
+      "id": 6,
+      "name": "Aurélien Tchouaméni",
+      "team": "France",
+      "club": "Real Madrid",
+      "position": "DM",
+      "difficulty": "workhorse",
+      "target": { "metric": "tackles_and_passacc", "tackles_threshold": 3, "passacc_threshold": 0.85, "human": "3+ tackles and 85% passing" },
+      "ai_rationale": "Argentina's midfield trio (De Paul, Mac Allister, Enzo) presses aggressively. Tchouaméni's pass completion historically dips to ~82% in high-press games. Pass-accuracy clause is the risk."
+    },
+    {
+      "id": 7,
+      "name": "William Saliba",
+      "team": "France",
+      "club": "Arsenal",
+      "position": "CB",
+      "difficulty": "defender",
+      "target": { "metric": "cleansheet_or_goal", "human": "Keep a clean sheet or score" },
+      "ai_rationale": "Argentina averages 1.8 goals per match this cycle. Clean sheet is unlikely. Saliba has 0 international goals — the OR-clause is a long shot."
+    },
+
+    {
+      "id": 8,
+      "name": "Lionel Messi",
+      "team": "Argentina",
+      "club": "Inter Miami",
+      "position": "RW",
+      "difficulty": "star",
+      "target": { "metric": "goals_or_assists", "threshold": 1, "human": "Score or assist" },
+      "ai_rationale": "Even at 38, Messi hits 1g+a in ~72% of competitive starts. France's RB rotation is unsettled. Target is on the easier side for a star — but a single tactical adjustment from Deschamps could neutralize him."
+    },
+    {
+      "id": 9,
+      "name": "Julián Álvarez",
+      "team": "Argentina",
+      "club": "Atlético Madrid",
+      "position": "ST",
+      "difficulty": "star",
+      "target": { "metric": "goals", "threshold": 2, "human": "Score 2 goals" },
+      "ai_rationale": "Álvarez's brace-rate is ~18% vs tier-1 defenses. France's CB pairing is solid but Saliba sometimes drops too deep, opening channels. Realistic in a 3-3 type match, unlikely in a tight defensive game."
+    },
+    {
+      "id": 10,
+      "name": "Alexis Mac Allister",
+      "team": "Argentina",
+      "club": "Liverpool",
+      "position": "CM",
+      "difficulty": "workhorse",
+      "target": { "metric": "tackles_and_passacc", "tackles_threshold": 3, "passacc_threshold": 0.85, "human": "3+ tackles and 85% passing" },
+      "ai_rationale": "France press in waves rather than constantly. Mac Allister thrives in this rhythm — his pass completion vs. French clubs in CL play averages 89%. High confidence."
+    },
+    {
+      "id": 11,
+      "name": "Cristian Romero",
+      "team": "Argentina",
+      "club": "Tottenham",
+      "position": "CB",
+      "difficulty": "defender",
+      "target": { "metric": "cleansheet_or_goal", "human": "Keep a clean sheet or score" },
+      "ai_rationale": "France's xG per match this cycle is 1.6. Clean sheet is unlikely but Romero is one of the few CBs with a real set-piece goal threat (4 in his last 18 club appearances)."
+    },
+
+    {
+      "id": 12,
+      "name": "Achraf Hakimi",
+      "team": "Morocco",
+      "club": "PSG",
+      "position": "RB",
+      "difficulty": "regular",
+      "target": { "metric": "goals_or_assists", "threshold": 1, "human": "Score or assist" },
+      "ai_rationale": "Morocco's most reliable creator. Brazil's LB rotation is unsettled and Vinicius rarely tracks back — Hakimi will have acres of space. Strong pick."
+    },
+    {
+      "id": 13,
+      "name": "Hakim Ziyech",
+      "team": "Morocco",
+      "club": "Galatasaray",
+      "position": "RW",
+      "difficulty": "regular",
+      "target": { "metric": "shots_on_target", "threshold": 2, "human": "At least 2 shots on target" },
+      "ai_rationale": "Ziyech's set-piece deliveries plus his trademark cut-inside-and-shoot pattern make 2 SoT realistic against any defense. Risk: he gets subbed off in the 65th if Morocco needs to defend a lead."
+    },
+    {
+      "id": 14,
+      "name": "Youssef En-Nesyri",
+      "team": "Morocco",
+      "club": "Fenerbahçe",
+      "position": "ST",
+      "difficulty": "regular",
+      "target": { "metric": "goals", "threshold": 1, "human": "Score at least once" },
+      "ai_rationale": "Single-goal target is generous, but Morocco's chance creation against top-tier opposition is the lowest in the field. En-Nesyri averages 0.6 npxG vs. tier-1 defenses."
+    },
+    {
+      "id": 15,
+      "name": "Yassine Bono",
+      "team": "Morocco",
+      "club": "Al-Hilal",
+      "position": "GK",
+      "difficulty": "GK",
+      "target": { "metric": "saves_or_cleansheet", "saves_threshold": 4, "human": "4+ saves or a clean sheet" },
+      "ai_rationale": "Bono averages 4.2 saves per match against top-10 opposition. Brazil will generate volume — the saves clause is the easier path. Strong dark-horse pick."
+    }
+  ]
+}
