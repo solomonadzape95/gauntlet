@@ -1,0 +1,72 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile=false",
+  "redirects": [
+    {
+      "source": "/discord",
+      "destination": "https://discord.gg/tatum",
+      "permanent": false
+    },
+    {
+      "source": "/twitter",
+      "destination": "https://x.com/Tatum_io",
+      "permanent": false
+    },
+    {
+      "source": "/x",
+      "destination": "https://x.com/Tatum_io",
+      "permanent": false
+    },
+    {
+      "source": "/walrus",
+      "destination": "https://docs.walrus.site",
+      "permanent": false
+    },
+    {
+      "source": "/sui",
+      "destination": "https://sui.io",
+      "permanent": false
+    },
+    {
+      "source": "/repo",
+      "destination": "https://github.com/your-org/proof-of-receipt",
+      "permanent": false
+    },
+    {
+      "source": "/admin",
+      "has": [{ "type": "host", "value": "gauntlet-marketing.example" }],
+      "destination": "https://app.gauntlet.example/admin",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(pools|jerseys|crests|hero|tiers)/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ]
+}

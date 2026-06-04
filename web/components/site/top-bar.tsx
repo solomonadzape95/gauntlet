@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { WalletButton } from "./wallet-button";
 import { MenuDropdown } from "./menu-dropdown";
+import { NotificationBell } from "./notification-bell";
 import { Logo } from "@/components/icons/logo";
 
 export function TopBar() {
@@ -21,6 +22,7 @@ export function TopBar() {
           </span>
         </Link>
         <div className="flex items-center gap-3 md:gap-4 shrink-0">
+          <NotificationBell />
           <MenuDropdown />
           <WalletButton />
         </div>

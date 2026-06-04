@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { WalletButton } from "./wallet-button";
 import { AdminMenuDropdown, ADMIN_NAV } from "./admin-menu-dropdown";
+import { NotificationBell } from "./notification-bell";
 import { Logo } from "@/components/icons/logo";
 
 /**
@@ -53,8 +54,9 @@ export function AdminTopBar() {
           )}
         </div>
 
-        {/* RIGHT — menu + wallet */}
+        {/* RIGHT — bell + menu + wallet */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          <NotificationBell />
           <AdminMenuDropdown />
           <WalletButton />
         </div>

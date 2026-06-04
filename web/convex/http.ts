@@ -1,32 +1,45 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
+import { api } from "./_generated/api";
 
 /**
  * Public HTTP endpoints exposed by this Convex deployment.
  *
  * Routes here are reachable at `<NEXT_PUBLIC_CONVEX_URL replace ".convex.cloud"
- * with ".convex.site">/<path>`. The dashboard prints the exact site URL.
+ * with ".convex.site">/<path>`. The Convex dashboard prints the exact site URL.
  */
 const http = httpRouter();
 
 /**
  * Tatum Notifications webhook receiver.
  *
- * Set up in the Tatum dashboard:
- *   1. dashboard.tatum.io → Notifications → Create
- *   2. Address activity (or "Sui object activity") on the Gauntlet package
- *   3. Destination: webhook URL = `<convex-site-url>/tatum-webhook`
+ * Tatum can't reach localhost — this endpoint is for the **deployed**
+ * environment. For local dev you don't need any of this: the
+ * `sui_actions.pollEvents` cron polls Sui RPC every 30s and writes into
+ * the same `events` table, so the in-app bell + ticker work without
+ * Tatum at all.
  *
- * Tatum POSTs a JSON payload describing the event. We mirror it into:
- *   - `events` table (so the admin feed shows it without polling)
- *   - Discord, if `DISCORD_WEBHOOK_URL` is set in Convex env vars
+ * In production:
+ *   1. Convex dashboard → Settings → URL & Domains → "HTTP Actions URL"
+ *      (ends in `.convex.site`). Append `/tatum-webhook`.
+ *   2. dashboard.tatum.io → Notifications → Create → Address activity
+ *      on the Gauntlet package id → destination = the URL above.
  *
- * Returns 200 quickly so Tatum doesn't retry on slow Discord round-trips.
+ * What this handler does, in order:
+ *   1. Validates the JSON body.
+ *   2. Extracts one or more Sui events (best-effort across Tatum payload
+ *      shapes — single object, batched array, raw RPC dump).
+ *   3. Calls `api.events.append` so the row lands in the same `events`
+ *      table the in-app bell + admin feed already subscribe to.
+ *   4. Optionally fans out a one-line summary to `DISCORD_WEBHOOK_URL`
+ *      if you want external pings too — completely skippable.
+ *
+ * Returns 200 fast so Tatum doesn't retry on slow downstream calls.
  */
 http.route({
   path: "/tatum-webhook",
   method: "POST",
-  handler: httpAction(async (_ctx, req) => {
+  handler: httpAction(async (ctx, req) => {
     let payload: unknown;
     try {
       payload = await req.json();
@@ -34,19 +47,24 @@ http.route({
       return new Response("invalid json", { status: 400 });
     }
 
+    const events = normalizeToEvents(payload);
+    for (const ev of events) {
+      try {
+        await ctx.runMutation(api.events.append, ev);
+      } catch (e) {
+        console.warn("[tatum-webhook] events.append failed:", e);
+      }
+    }
+
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
-    if (discordUrl) {
-      // Best-effort fan-out. Don't block the webhook reply on Discord —
-      // Tatum re-fires on non-2xx so we want this fast & idempotent.
-      const summary = summarizeForDiscord(payload);
+    if (discordUrl && events.length > 0) {
       try {
         await fetch(discordUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            content: summary,
+            content: summarizeForDiscord(events),
             username: "Gauntlet",
-            avatar_url: undefined,
           }),
         });
       } catch (e) {
@@ -54,36 +72,95 @@ http.route({
       }
     }
 
-    return new Response("ok", { status: 200 });
+    return new Response(`ok · ${events.length} events`, { status: 200 });
   }),
 });
 
-/** Build a one-line Discord-friendly summary from the Tatum payload. */
-function summarizeForDiscord(payload: unknown): string {
-  const json = JSON.stringify(payload);
-  if (!payload || typeof payload !== "object") return `🟧 Gauntlet event · ${json.slice(0, 1500)}`;
+interface NormalizedEvent {
+  txDigest: string;
+  eventSeq: string;
+  type: string;
+  sender: string;
+  poolObjectId?: string;
+  payload: Record<string, unknown>;
+  timestampMs: number;
+}
+
+/**
+ * Tatum payload shapes vary by subscription type. This best-effort
+ * normalizer tries to pull out one or more Sui events regardless of
+ * whether Tatum sent a single event, an array, or a raw RPC dump with
+ * `result.data[]`.
+ */
+function normalizeToEvents(payload: unknown): NormalizedEvent[] {
+  if (!payload || typeof payload !== "object") return [];
+
+  if (Array.isArray(payload)) {
+    return payload
+      .map(toEvent)
+      .filter((x): x is NormalizedEvent => x !== null);
+  }
+
   const p = payload as Record<string, unknown>;
 
-  // Tatum payload shape varies by subscription type. Pull a few common
-  // fields and fall back to a JSON truncation.
-  const type =
-    (p.type as string | undefined) ??
-    (p.subscriptionType as string | undefined) ??
-    "event";
-  const txHash =
-    (p.txHash as string | undefined) ??
-    (p.txId as string | undefined) ??
-    (p.transactionId as string | undefined);
-  const address =
-    (p.address as string | undefined) ?? (p.sender as string | undefined);
-
-  const lines: string[] = [`🟧 **Gauntlet · ${type}**`];
-  if (address) lines.push(`👤  ${shortHex(address)}`);
-  if (txHash) lines.push(`🔗  https://suiscan.xyz/testnet/tx/${txHash}`);
-
-  if (lines.length === 1) {
-    lines.push("```json\n" + json.slice(0, 1500) + "\n```");
+  const result = p.result as { data?: unknown[] } | undefined;
+  if (result?.data && Array.isArray(result.data)) {
+    return result.data
+      .map(toEvent)
+      .filter((x): x is NormalizedEvent => x !== null);
   }
+
+  if (Array.isArray(p.events)) {
+    return p.events
+      .map(toEvent)
+      .filter((x): x is NormalizedEvent => x !== null);
+  }
+
+  const single = toEvent(p);
+  return single ? [single] : [];
+}
+
+function toEvent(raw: unknown): NormalizedEvent | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  const id = r.id as { txDigest?: string; eventSeq?: string } | undefined;
+  const txDigest =
+    id?.txDigest ??
+    (r.txDigest as string | undefined) ??
+    (r.txHash as string | undefined) ??
+    "";
+  const eventSeq =
+    id?.eventSeq ?? (r.eventSeq as string | undefined) ?? "0";
+  if (!txDigest) return null;
+
+  const fullType = (r.type as string | undefined) ?? "";
+  const type = fullType.split("::").pop() ?? fullType;
+  const sender = (r.sender as string | undefined) ?? "";
+  const parsed = (r.parsedJson ?? r.payload ?? {}) as Record<string, unknown>;
+  const poolObjectId =
+    typeof parsed.pool_id === "string" ? parsed.pool_id : undefined;
+  const timestampMs = Number(r.timestampMs ?? Date.now());
+
+  return {
+    txDigest,
+    eventSeq: String(eventSeq),
+    type: type || "Unknown",
+    sender,
+    poolObjectId,
+    payload: parsed,
+    timestampMs: Number.isFinite(timestampMs) ? timestampMs : Date.now(),
+  };
+}
+
+function summarizeForDiscord(events: NormalizedEvent[]): string {
+  const lines = events.slice(0, 3).map((e) => {
+    const tx = e.txDigest
+      ? `https://suiscan.xyz/testnet/tx/${e.txDigest}`
+      : "";
+    return `🟧 **${e.type}**${e.sender ? ` · ${shortHex(e.sender)}` : ""}${tx ? `\n${tx}` : ""}`;
+  });
+  if (events.length > 3) lines.push(`+${events.length - 3} more`);
   return lines.join("\n");
 }
 
