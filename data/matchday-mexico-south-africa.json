@@ -1,0 +1,193 @@
+{
+  "results": [
+    {
+      "player_id": 35930,
+      "name": "L. Malagón",
+      "hit_target": false,
+      "verdict": "Couldn't make the crucial saves or keep the clean sheet against a tough opponent.",
+      "stats": {}
+    },
+    {
+      "player_id": 2878,
+      "name": "J. Sánchez",
+      "hit_target": true,
+      "verdict": "Solid defensive work with good ball distribution under pressure.",
+      "stats": {}
+    },
+    {
+      "player_id": 362815,
+      "name": "E. López",
+      "hit_target": true,
+      "verdict": "Played the full match, showing good stamina and commitment.",
+      "stats": {}
+    },
+    {
+      "player_id": 2873,
+      "name": "C. Montes",
+      "hit_target": false,
+      "verdict": "The clean sheet was just out of reach today.",
+      "stats": {}
+    },
+    {
+      "player_id": 126751,
+      "name": "K. Álvarez",
+      "hit_target": true,
+      "verdict": "Dominated the defensive third with decisive clearances.",
+      "stats": {}
+    },
+    {
+      "player_id": 426512,
+      "name": "Iker Jareth Fimbres Ochoa",
+      "hit_target": false,
+      "verdict": "Couldn't create enough dangerous opportunities for the forwards.",
+      "stats": {}
+    },
+    {
+      "player_id": 167014,
+      "name": "F. Ambríz",
+      "hit_target": true,
+      "verdict": "Battled hard in midfield, winning tackles and keeping possession.",
+      "stats": {}
+    },
+    {
+      "player_id": 266345,
+      "name": "É. Lira",
+      "hit_target": false,
+      "verdict": "Worked hard but couldn't quite hit the mark on tackles and passing accuracy.",
+      "stats": {}
+    },
+    {
+      "player_id": 2887,
+      "name": "R. Jiménez",
+      "hit_target": true,
+      "verdict": "Came through with a crucial goal to make the difference.",
+      "stats": {}
+    },
+    {
+      "player_id": 291713,
+      "name": "A. González",
+      "hit_target": false,
+      "verdict": "Got into good positions but couldn't test the keeper enough.",
+      "stats": {}
+    },
+    {
+      "player_id": 1577,
+      "name": "D. Lainez",
+      "hit_target": true,
+      "verdict": "Showed flashes of brilliance, creating chances with clever passes.",
+      "stats": {}
+    },
+    {
+      "player_id": 3275,
+      "name": "R. Williams",
+      "hit_target": false,
+      "verdict": "Conceded a goal and couldn't reach the save percentage target.",
+      "stats": {}
+    },
+    {
+      "player_id": 330174,
+      "name": "T. Matuludi",
+      "hit_target": true,
+      "verdict": "Strong defensive presence, clearing his lines effectively.",
+      "stats": {}
+    },
+    {
+      "player_id": 474630,
+      "name": "K. Ndamase",
+      "hit_target": false,
+      "verdict": "Put in a shift but missed out on the tackle and passing targets.",
+      "stats": {}
+    },
+    {
+      "player_id": 46334,
+      "name": "A. Modiba",
+      "hit_target": false,
+      "verdict": "Couldn't prevent Mexico from finding the back of the net.",
+      "stats": {}
+    },
+    {
+      "player_id": 510799,
+      "name": "M. Mbokazi",
+      "hit_target": true,
+      "verdict": "Played the entire game, showing great endurance in defense.",
+      "stats": {}
+    },
+    {
+      "player_id": 3287,
+      "name": "T. Mokoena",
+      "hit_target": true,
+      "verdict": "Orchestrated play from midfield with some excellent key passes.",
+      "stats": {}
+    },
+    {
+      "player_id": 194430,
+      "name": "T. Mbatha",
+      "hit_target": false,
+      "verdict": "Tried his best but fell short on the defensive and passing metrics.",
+      "stats": {}
+    },
+    {
+      "player_id": 295977,
+      "name": "T. Moremi",
+      "hit_target": true,
+      "verdict": "A tireless performer, winning tackles and keeping the ball well.",
+      "stats": {}
+    },
+    {
+      "player_id": 179893,
+      "name": "O. Appollis",
+      "hit_target": false,
+      "verdict": "As a star player, he needed to deliver a goal or assist.",
+      "stats": {}
+    },
+    {
+      "player_id": 98936,
+      "name": "L. Foster",
+      "hit_target": false,
+      "verdict": "Couldn't get enough shots on target to trouble the defense.",
+      "stats": {}
+    },
+    {
+      "player_id": 414149,
+      "name": "R. Mofokeng",
+      "hit_target": false,
+      "verdict": "Looked lively but failed to create the required number of chances.",
+      "stats": {}
+    }
+  ],
+  "eliminated_player_ids": [
+    35930,
+    2873,
+    426512,
+    266345,
+    291713,
+    3275,
+    474630,
+    46334,
+    194430,
+    179893,
+    98936,
+    414149
+  ],
+  "survivor_player_ids": [
+    2878,
+    362815,
+    126751,
+    167014,
+    2887,
+    1577,
+    330174,
+    510799,
+    3287,
+    295977
+  ],
+  "fixtures": [
+    {
+      "home": "Mexico",
+      "away": "South Africa",
+      "score": "1-0"
+    }
+  ],
+  "schema_version": 2,
+  "matchday": "MD1 — Mexico vs South Africa"
+}
