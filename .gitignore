@@ -19,3 +19,22 @@ contracts/.trace
 test-results/
 playwright-report/
 playwright/.cache/
+
+# chats / drafts / hackathon notes (kept locally, never committed)
+gemini-chat.txt
+chat-jersey.txt
+what-we-are-building.txt
+hackathon-overview.txt
+content.md
+competition.md
+
+# design references kept locally but out of the repo
+inspo/
+mock-jersey/
+
+# script caches
+data/.cache/
+
+# build / tool caches
+web/tsconfig.tsbuildinfo
+web/.agents/
