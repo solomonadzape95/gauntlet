@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:roster": "tsx scripts/seed-roster.ts",
+    "seed:matchday": "tsx scripts/seed-matchday.ts",
+    "gen:jerseys": "tsx scripts/gen-jerseys.ts"
   },
   "dependencies": {
     "next": "^15.0.0",
@@ -15,7 +18,12 @@
     "react-dom": "^19.0.0",
     "@mysten/dapp-kit": "^0.15.0",
     "@mysten/sui": "^1.0.0",
-    "@tanstack/react-query": "^5.0.0"
+    "@tanstack/react-query": "^5.0.0",
+    "motion": "^12.0.0",
+    "convex": "^1.10.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.5.0",
+    "lucide-react": "^0.460.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
@@ -24,6 +32,12 @@
     "@types/react-dom": "^19.0.0",
     "tailwindcss": "^3.4.0",
     "postcss": "^8.4.0",
-    "autoprefixer": "^10.4.0"
+    "autoprefixer": "^10.4.0",
+    "tsx": "^4.19.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@mysten/sui": "1.28.1"
+    }
   }
 }
