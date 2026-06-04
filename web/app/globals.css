@@ -2,8 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+/*
+ * Xirod — heavy stenciled display font used for the player-card squad number.
+ * Drop the font file at `/public/fonts/Xirod.woff2` to use the real Xirod
+ * face (free for personal use from Typodermic). Until the file lands the
+ * @font-face declaration silently fails and the cascade falls through to
+ * `Black Ops One` / `Iceland` (Google Fonts) and then to a system display
+ * stack — the cards still render, just with the closest free analogue.
+ */
+@font-face {
+  font-family: "Xirod";
+  src: url("/fonts/Xirod.woff2") format("woff2"),
+       url("/fonts/Xirod.woff") format("woff"),
+       url("/fonts/Xirod.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Google Fonts fallbacks for Xirod — load in the same stack so the cards
+ * have at least one display font available even before the real Xirod is
+ * dropped in. */
+@import url("https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Iceland&display=swap");
+
+:root {
+  color-scheme: dark;
+  --font-xirod: "Xirod", "Black Ops One", "Iceland", "Anton", Impact, sans-serif;
+}
+
+html, body {
+  background: #0A0A0A;
+  color: #FAFAFA;
+}
 
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  @apply font-sans antialiased;
+  font-feature-settings: "kern", "liga";
+}
+
+/* DM Mono powers every utility / numeric / metadata surface */
+.text-utility {
+  font-family: var(--font-mono), "DM Mono", ui-monospace, monospace;
+  font-weight: 400;
+}
+
+/* Tabular nums for any number-heavy surface */
+.tabular {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono), "DM Mono", ui-monospace, monospace;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #404040; }
+
+/* dApp Kit Connect button — strip default border and match system typography */
+[data-dapp-kit] button,
+[data-dapp-kit] button:hover,
+[data-dapp-kit] button:focus,
+[data-dapp-kit] button:focus-visible {
+  font-family: var(--font-mono), monospace !important;
+  border-radius: 9999px !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
