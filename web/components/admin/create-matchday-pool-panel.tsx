@@ -13,7 +13,8 @@ import { Loader2 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { PACKAGE_ID, suiscanObject } from "@/lib/sui";
+import { PACKAGE_ID, TREASURY_ADDRESS, suiscanObject } from "@/lib/sui";
+import { rosterWeightArgs } from "@/lib/odds";
 import { convexConfigured } from "@/lib/convex";
 import { RosterCriteriaFilter } from "./roster-criteria-filter";
 import type { Player } from "@/lib/types";
@@ -145,11 +146,24 @@ export function CreateMatchdayPoolPanel({
       }
       const feeMist = BigInt(Math.round(fee * 1e9));
       const rosterBytes = Array.from(new TextEncoder().encode(rosterBlobId));
+      // Per-player share weights, fixed on-chain from this roster so they
+      // can't be forged at mint time.
+      const { playerIds, weights } = rosterWeightArgs(players);
+      const treasury =
+        TREASURY_ADDRESS && TREASURY_ADDRESS !== "0x0"
+          ? TREASURY_ADDRESS
+          : account.address;
 
       const tx = new Transaction();
       tx.moveCall({
         target: `${PACKAGE_ID}::pool::create_pool`,
-        arguments: [tx.pure.u64(feeMist), tx.pure.vector("u8", rosterBytes)],
+        arguments: [
+          tx.pure.u64(feeMist),
+          tx.pure.vector("u8", rosterBytes),
+          tx.pure.address(treasury),
+          tx.pure.vector("u32", playerIds),
+          tx.pure.vector("u64", weights),
+        ],
       });
 
       const result = await signAndExecute({ transaction: tx });

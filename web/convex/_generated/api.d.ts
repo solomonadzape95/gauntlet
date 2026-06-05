@@ -13,6 +13,7 @@ import type * as cashouts from "../cashouts.js";
 import type * as crons from "../crons.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
+import type * as matchSim from "../matchSim.js";
 import type * as matchdays from "../matchdays.js";
 import type * as passes from "../passes.js";
 import type * as rosters from "../rosters.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   events: typeof events;
   http: typeof http;
+  matchSim: typeof matchSim;
   matchdays: typeof matchdays;
   passes: typeof passes;
   rosters: typeof rosters;

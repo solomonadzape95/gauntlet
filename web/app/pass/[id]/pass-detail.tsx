@@ -1,18 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
+import { useQuery as useConvexQuery } from "convex/react";
 import { Transaction } from "@mysten/sui/transactions";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 
+import { api } from "@/convex/_generated/api";
 import type { Player } from "@/lib/types";
 import {
   PACKAGE_ID,
+  ROSTER_BLOB_ID,
   formatSui,
   shortAddress,
   suiscanTx,
@@ -26,7 +29,14 @@ import {
   type PoolState,
 } from "@/lib/hooks/use-pool-state";
 import { mintCountsKey } from "@/lib/hooks/use-mint-counts";
+import { useRoster } from "@/lib/hooks/use-roster";
+import { convexConfigured } from "@/lib/convex";
 import { usePass, PASS_KEY, type PassObject } from "@/lib/hooks/use-pass";
+import {
+  survivalWeight,
+  weightedPayout,
+  PLATFORM_FEE_BPS,
+} from "@/lib/odds";
 
 import { TopBar } from "@/components/site/top-bar";
 import { CornerFrame } from "@/components/ui/corner-frame";
@@ -45,13 +55,7 @@ import { cn } from "@/lib/cn";
 
 type PassStatus = "alive" | "eliminated" | "waiting" | "closed";
 
-export function PassDetail({
-  passId,
-  players,
-}: {
-  passId: string;
-  players: Player[];
-}) {
+export function PassDetail({ passId }: { passId: string }) {
   const account = useCurrentAccount();
   const { data: pass, isLoading: passLoading } = usePass(passId);
   // Pool state must come from the pass's OWN pool_id (set when it was
@@ -61,7 +65,22 @@ export function PassDetail({
   const poolIdForPass = pass?.pool_id ?? "0x0";
   const { data: pool, isLoading: poolLoading } = usePoolState(poolIdForPass);
 
-  if (passLoading || poolLoading) {
+  // The roster must come from the matchday tied to *this pass's pool*, not
+  // env-default. Look up the matchday row in Convex, fall back to env when
+  // the pool isn't recorded (legacy single-pool deployments).
+  const matchdayRow = useConvexQuery(
+    api.matchdays.getByPool,
+    convexConfigured && pass?.pool_id ? { poolObjectId: pass.pool_id } : "skip",
+  ) as { rosterBlobId?: string } | null | undefined;
+  const rosterBlobId = matchdayRow?.rosterBlobId ?? ROSTER_BLOB_ID;
+  const { data: roster, isLoading: rosterLoading } = useRoster(rosterBlobId);
+  // While Convex is still loading the matchday row, treat the roster as
+  // pending too — we don't want to flash "Unknown player" using a stale
+  // env-default roster while the real one is on its way.
+  const matchdayPending =
+    convexConfigured && !!pass?.pool_id && matchdayRow === undefined;
+
+  if (passLoading || poolLoading || rosterLoading || matchdayPending) {
     return (
       <main className="min-h-screen">
         <TopBar />
@@ -113,6 +132,7 @@ export function PassDetail({
   // That gate is gone — the pool state above is now sourced from the pass's
   // own pool_id, so any pass minted against any pool renders correctly.
 
+  const players: Player[] = roster?.players ?? [];
   const player = players.find((p) => p.id === pass.player_id);
   if (!player) {
     return (
@@ -296,9 +316,14 @@ function StatusPanel({
   isOwner: boolean;
 }) {
   const poolIdForPass = pass.pool_id;
+  // Weighted share of the post-fee pot — mirrors the on-chain cashout math.
   let estimatedPayout = 0n;
-  if (status === "alive" && pool.alive_count > 0) {
-    estimatedPayout = pool.pot_mist / BigInt(pool.alive_count);
+  if (status === "alive") {
+    estimatedPayout = weightedPayout(
+      pool.net_pot_mist,
+      survivalWeight(player.difficulty),
+      pool.surviving_weight,
+    );
   }
 
   if (status === "waiting") {
@@ -383,6 +408,18 @@ function CashoutPanel({
   const [digest, setDigest] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // The alive-state CashoutPanel only renders when usePoolState says the
+  // player isn't in eliminated_players. But that field is on a 10s poll,
+  // so if the user lands here in the first ~10s after settle their view
+  // might be stale and they'd click Cash out → on-chain EPassDead. Force a
+  // fresh read on mount so the window where you can "wrongly cash out" is
+  // sub-second instead of ~10s.
+  useEffect(() => {
+    qc.refetchQueries({ queryKey: poolStateKey(poolId) });
+    // Run once on mount per (poolId, passId); deps intentionally minimal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolId, passId]);
+
   const handleCashout = async () => {
     try {
       setPhase("signing");
@@ -414,6 +451,10 @@ function CashoutPanel({
         setPhase("idle"); // user cancelled — back to ready state, no error
         return;
       }
+      // On chain rejection (EPassDead, EWrongPhase, etc), force a fresh
+      // read of the on-chain pool so a stale UI state doesn't keep showing
+      // the green Cashout panel after we've learned the truth.
+      qc.refetchQueries({ queryKey: poolStateKey(poolId) });
       setPhase("error");
       setError(describeTxError(e) ?? "Cashout failed.");
     }
@@ -457,6 +498,13 @@ function CashoutPanel({
         <Stat label="Survivors" value={String(pool.alive_count)} />
         <Stat label="Pot" value={formatSui(pool.pot_mist)} unit="SUI" />
       </div>
+
+      <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
+        Your payout is a share of the prize pool weighted by how unlikely your
+        pick was to survive — rarer survivals earn more. A{" "}
+        {PLATFORM_FEE_BPS / 100}% platform fee was deducted from the pot before
+        payouts.
+      </p>
 
       {!isOwner ? (
         <p className="mt-6 text-sm text-zinc-400">

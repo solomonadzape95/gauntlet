@@ -52,14 +52,15 @@ export default function PoolDetailPage({
     );
   }
 
-  // Tournament containers (no on-chain Pool object) and locked / coming-soon
-  // entries both render the same overview shell — image + tagline + matchday
-  // schedule strip — with different copy depending on state.
+  // Tournament containers (no on-chain Pool object) and coming-soon entries
+  // render the overview shell — image + tagline + matchday schedule strip.
+  // Any matchday with its own Pool object renders the live detail view, even
+  // once it's settled ("done"): a played matchday still has results to show,
+  // and routing it back to the overview would loop on the "Enter matchday" CTA.
   const isContainer = !pool.poolId;
   const isLiveContainer = isContainer && pool.status === "live";
-  const isLocked = pool.status !== "live";
 
-  if (isContainer || isLocked) {
+  if (isContainer) {
     return (
       <TournamentOverview
         pool={pool}

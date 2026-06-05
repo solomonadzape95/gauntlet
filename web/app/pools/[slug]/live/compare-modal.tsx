@@ -13,6 +13,7 @@ import {
   survivalLikelihood,
   estimateSurvivorCount,
   payoutIfSurvives,
+  netPotMist,
 } from "@/lib/odds";
 import { cn } from "@/lib/cn";
 
@@ -35,7 +36,12 @@ export function CompareModal({
   const [playerB, setPlayerB] = useState<Player | null>(null);
 
   const estSurvivors = estimateSurvivorCount(players, counts);
-  const payoutPerSurvivor = payoutIfSurvives(pool.pot_mist, estSurvivors);
+  // Estimate against the post-fee pot so the comparison reflects what
+  // survivors actually share.
+  const payoutPerSurvivor = payoutIfSurvives(
+    netPotMist(pool.pot_mist),
+    estSurvivors,
+  );
 
   return (
     <AnimatePresence>

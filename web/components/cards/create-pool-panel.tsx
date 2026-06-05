@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import {
+  useCurrentAccount,
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { Loader2 } from "lucide-react";
 
-import { PACKAGE_ID, ROSTER_BLOB_ID } from "@/lib/sui";
+import { PACKAGE_ID, ROSTER_BLOB_ID, TREASURY_ADDRESS } from "@/lib/sui";
+import { rosterWeightArgs } from "@/lib/odds";
+import { fetchRoster } from "@/lib/walrus";
 import { Button } from "@/components/ui/button";
 
 export function CreatePoolPanel({
@@ -18,6 +21,7 @@ export function CreatePoolPanel({
   embedded?: boolean;
 }) {
   const client = useSuiClient();
+  const account = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const [feeSui, setFeeSui] = useState("0.1");
   const [blobId, setBlobId] = useState(ROSTER_BLOB_ID);
@@ -40,13 +44,33 @@ export function CreatePoolPanel({
       if (!blobId.trim()) {
         throw new Error("Roster blob ID required");
       }
+      if (!account?.address) {
+        throw new Error("Connect a wallet");
+      }
+
+      // Fetch the roster so we can fix each player's share weight on-chain.
+      const roster = await fetchRoster(blobId.trim());
+      if (!roster?.players?.length) {
+        throw new Error("Roster blob has no players");
+      }
+      const { playerIds, weights } = rosterWeightArgs(roster.players);
+      const treasury =
+        TREASURY_ADDRESS && TREASURY_ADDRESS !== "0x0"
+          ? TREASURY_ADDRESS
+          : account.address;
 
       const tx = new Transaction();
       const rosterBytes = Array.from(new TextEncoder().encode(blobId.trim()));
 
       tx.moveCall({
         target: `${PACKAGE_ID}::pool::create_pool`,
-        arguments: [tx.pure.u64(feeMist), tx.pure.vector("u8", rosterBytes)],
+        arguments: [
+          tx.pure.u64(feeMist),
+          tx.pure.vector("u8", rosterBytes),
+          tx.pure.address(treasury),
+          tx.pure.vector("u32", playerIds),
+          tx.pure.vector("u64", weights),
+        ],
       });
 
       const result = await signAndExecute({ transaction: tx });

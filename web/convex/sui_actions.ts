@@ -162,5 +162,21 @@ async function maybeProjectEvent(
       passId,
       status: "out",
     });
+  } else if (type === "PoolSettled") {
+    // The on-chain settle event carries the eliminated player ids. Bulk-flip
+    // every still-alive pass for those players to "out" so the Convex view
+    // converges on the on-chain truth even if the admin's UI didn't fire the
+    // mutation directly (closed tab, network blip, etc.).
+    const poolObjectId = String(data.pool_id ?? "");
+    if (!poolObjectId) return;
+    const raw = data.eliminated_players ?? data.eliminated_player_ids ?? [];
+    const eliminatedPlayerIds = Array.isArray(raw)
+      ? raw.map((x) => Number(x)).filter((n) => Number.isFinite(n))
+      : [];
+    if (eliminatedPlayerIds.length === 0) return;
+    await ctx.runMutation(api.passes.markEliminatedByPlayer, {
+      poolObjectId,
+      eliminatedPlayerIds,
+    });
   }
 }

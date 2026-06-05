@@ -67,3 +67,33 @@ export const setStatus = mutation({
     await ctx.db.patch(pass._id, { status });
   },
 });
+
+/**
+ * Bulk-flip every alive pass in `poolObjectId` whose playerId is in
+ * `eliminatedPlayerIds` to status "out". Idempotent and safe to call
+ * multiple times (we only touch rows that are still "alive", so we don't
+ * stomp passes that have already been cashed). Called from the admin's
+ * settle flow and as a backstop from the Sui event projector.
+ */
+export const markEliminatedByPlayer = mutation({
+  args: {
+    poolObjectId: v.string(),
+    eliminatedPlayerIds: v.array(v.number()),
+  },
+  handler: async (ctx, { poolObjectId, eliminatedPlayerIds }) => {
+    const ids = new Set(eliminatedPlayerIds);
+    if (ids.size === 0) return { updated: 0 };
+    const rows = await ctx.db
+      .query("passes")
+      .withIndex("by_pool", (q) => q.eq("poolObjectId", poolObjectId))
+      .collect();
+    let updated = 0;
+    for (const r of rows) {
+      if (ids.has(r.playerId) && r.status === "alive") {
+        await ctx.db.patch(r._id, { status: "out" });
+        updated++;
+      }
+    }
+    return { updated };
+  },
+});

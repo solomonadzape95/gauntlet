@@ -192,53 +192,56 @@ function PoolRow({ md }: { md: MdRow }) {
       )[pool.phase] ?? "open"
     : "open";
 
+  // Stretched-link pattern: the row-level <Link> is an absolute overlay rather
+  // than a wrapper, so the inner Suiscan <a> isn't nested inside it (nested
+  // anchors are invalid HTML and break hydration). The Suiscan link is raised
+  // above the overlay with `relative z-10` so it stays independently clickable.
   return (
-    <li>
+    <li className="relative grid grid-cols-12 gap-3 items-center px-5 py-4 hover:bg-zinc-900/40 transition-colors">
       <Link
         href={`/admin/pools/${poolId}`}
-        className="grid grid-cols-12 gap-3 items-center px-5 py-4 hover:bg-zinc-900/40 transition-colors"
-      >
-        <div className="col-span-3 md:col-span-2 font-mono text-sm text-zinc-100">
-          {md.label}
+        aria-label={`Manage ${md.label}${md.fixture ? ` · ${md.fixture}` : ""}`}
+        className="absolute inset-0"
+      />
+      <div className="col-span-3 md:col-span-2 font-mono text-sm text-zinc-100">
+        {md.label}
+      </div>
+      <div className="col-span-9 md:col-span-4 min-w-0">
+        <div className="text-base text-zinc-100 truncate">
+          {md.fixture ?? "—"}
         </div>
-        <div className="col-span-9 md:col-span-4 min-w-0">
-          <div className="text-base text-zinc-100 truncate">
-            {md.fixture ?? "—"}
-          </div>
-          <div className="text-utility text-zinc-500 mt-0.5">{md.date}</div>
-        </div>
-        <div className="col-span-6 md:col-span-2 text-utility inline-flex items-center gap-2">
-          <StatusDot status={phaseDot} />
-          {phaseLabel}
-        </div>
-        <div className="col-span-6 md:col-span-2 text-utility text-zinc-500 inline-flex items-center gap-3">
-          {pool ? (
-            <>
-              <span>{pool.total_passes} mints</span>
-              <span className="font-mono">
-                {formatSui(pool.pot_mist)} SUI
-              </span>
-            </>
-          ) : (
-            <span className="text-zinc-700">—</span>
-          )}
-        </div>
-        <div className="col-span-10 md:col-span-1">
-          <a
-            href={suiscanObject(poolId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-xs text-zinc-400 hover:text-hazard inline-flex items-center gap-1"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {shortAddress(poolId, 6, 4)}
-            <ArrowUpRight className="size-3" />
-          </a>
-        </div>
-        <div className="col-span-2 md:col-span-1 text-right">
-          <ArrowUpRight className="size-4 text-zinc-600 inline" />
-        </div>
-      </Link>
+        <div className="text-utility text-zinc-500 mt-0.5">{md.date}</div>
+      </div>
+      <div className="col-span-6 md:col-span-2 text-utility inline-flex items-center gap-2">
+        <StatusDot status={phaseDot} />
+        {phaseLabel}
+      </div>
+      <div className="col-span-6 md:col-span-2 text-utility text-zinc-500 inline-flex items-center gap-3">
+        {pool ? (
+          <>
+            <span>{pool.total_passes} mints</span>
+            <span className="font-mono">
+              {formatSui(pool.pot_mist)} SUI
+            </span>
+          </>
+        ) : (
+          <span className="text-zinc-700">—</span>
+        )}
+      </div>
+      <div className="col-span-10 md:col-span-1 relative z-10">
+        <a
+          href={suiscanObject(poolId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-xs text-zinc-400 hover:text-hazard inline-flex items-center gap-1"
+        >
+          {shortAddress(poolId, 6, 4)}
+          <ArrowUpRight className="size-3" />
+        </a>
+      </div>
+      <div className="col-span-2 md:col-span-1 text-right">
+        <ArrowUpRight className="size-4 text-zinc-600 inline" />
+      </div>
     </li>
   );
 }

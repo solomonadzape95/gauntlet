@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useQuery as useConvexQuery } from "convex/react";
 import {
   Award,
   Flag,
@@ -11,6 +12,8 @@ import {
   Square as SquareIcon,
 } from "lucide-react";
 
+import { api } from "@/convex/_generated/api";
+import { convexConfigured } from "@/lib/convex";
 import {
   MATCH_SIM_CHANNEL,
   type MatchEvent,
@@ -86,6 +89,7 @@ export function MatchBroadcast({
   homeName,
   awayName,
   roster,
+  poolId,
 }: {
   homeName: string;
   awayName: string;
@@ -93,6 +97,8 @@ export function MatchBroadcast({
    *  full name + team affiliation as fallback when the description text
    *  doesn't already include them. */
   roster?: Player[];
+  /** Pool object id — required for the cross-device Convex subscription. */
+  poolId?: string;
 }) {
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [score, setScore] = useState<{ home: number; away: number }>({
@@ -103,6 +109,7 @@ export function MatchBroadcast({
     "pre" | "live" | "halftime" | "fulltime"
   >("pre");
   const [matchMin, setMatchMin] = useState(0);
+  const [latestStartedAt, setLatestStartedAt] = useState<number | null>(null);
   const feedRef = useRef<HTMLOListElement>(null);
 
   const playerById = useMemo(() => {
@@ -110,6 +117,8 @@ export function MatchBroadcast({
     return new Map(roster.map((p) => [p.id, p]));
   }, [roster]);
 
+  // Same-browser transport (BroadcastChannel) — instant reaction in tabs
+  // sharing this browser/profile.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ch = new BroadcastChannel(MATCH_SIM_CHANNEL);
@@ -120,11 +129,12 @@ export function MatchBroadcast({
         setScore({ home: 0, away: 0 });
         setPhase("live");
         setMatchMin(0);
+        setLatestStartedAt(data.startedAt);
       } else if (data.type === "stop") {
         setPhase("pre");
       } else if (data.type === "event") {
         const e = data.event;
-        setEvents((prev) => [...prev, e]);
+        setEvents((prev) => mergeEvent(prev, e));
         setMatchMin(e.t_min);
         if (e.score) setScore(e.score);
         if (e.type === "halftime") setPhase("halftime");
@@ -138,6 +148,69 @@ export function MatchBroadcast({
       ch.close();
     };
   }, []);
+
+  // Cross-device transport (Convex live-query). Replays the latest run
+  // from the events table so any tab/device shows the same state.
+  const simRows = useConvexQuery(
+    api.matchSim.latest,
+    convexConfigured && poolId && poolId !== "0x0"
+      ? { poolObjectId: poolId, limit: 500 }
+      : "skip",
+  ) as
+    | Array<{
+        type: string;
+        payload: { startedAt: number; event?: MatchEvent; durationMs?: number };
+      }>
+    | undefined;
+
+  useEffect(() => {
+    if (!simRows || simRows.length === 0) return;
+    // Find the most recent run (max startedAt across the rows).
+    let latestStart = 0;
+    for (const r of simRows) {
+      const t = Number(r.payload?.startedAt ?? 0);
+      if (t > latestStart) latestStart = t;
+    }
+    if (latestStart === 0) return;
+    // Was this run aborted? Take the latest stop for it.
+    const runRows = simRows.filter(
+      (r) => Number(r.payload?.startedAt ?? 0) === latestStart,
+    );
+    const aborted = runRows.some((r) => r.type === "Sim:stop");
+    if (aborted && latestStartedAt !== latestStart) {
+      setPhase("pre");
+      setEvents([]);
+      setScore({ home: 0, away: 0 });
+      setMatchMin(0);
+      setLatestStartedAt(latestStart);
+      return;
+    }
+    // New run kicked off remotely — reset our local state to its first event.
+    if (latestStartedAt !== latestStart) {
+      setEvents([]);
+      setScore({ home: 0, away: 0 });
+      setMatchMin(0);
+      setLatestStartedAt(latestStart);
+      setPhase("live");
+    }
+    // Apply every event in chronological order.
+    const evts = runRows
+      .filter((r) => r.type.startsWith("Sim:") && r.payload?.event)
+      .map((r) => r.payload.event as MatchEvent)
+      .sort((a, b) => a.t_sec - b.t_sec);
+    if (evts.length === 0) return;
+    setEvents((prev) => {
+      let next = prev;
+      for (const e of evts) next = mergeEvent(next, e);
+      return next;
+    });
+    const last = evts[evts.length - 1];
+    setMatchMin(last.t_min);
+    if (last.score) setScore(last.score);
+    if (last.type === "halftime") setPhase("halftime");
+    else if (last.type === "fulltime") setPhase("fulltime");
+    else if (last.type === "kickoff") setPhase("live");
+  }, [simRows, latestStartedAt]);
 
   // Auto-scroll feed to the latest event.
   useEffect(() => {
@@ -268,6 +341,16 @@ export function MatchBroadcast({
       </ol>
     </div>
   );
+}
+
+/**
+ * Idempotent insert: append `e` to `prev` unless an event with the same id is
+ * already there. The same event may arrive from BroadcastChannel and Convex,
+ * so we de-dupe by `id` to keep the ticker honest.
+ */
+function mergeEvent(prev: MatchEvent[], e: MatchEvent): MatchEvent[] {
+  if (prev.some((p) => p.id === e.id)) return prev;
+  return [...prev, e];
 }
 
 function EventIcon({ type }: { type: MatchEvent["type"] }) {

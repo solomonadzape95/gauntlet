@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery as useConvexQuery } from "convex/react";
+import {
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+  useSuiClient,
+} from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
 import {
   ArrowUpRight,
   Flame,
@@ -12,7 +19,14 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { formatSui } from "@/lib/sui";
+import { api } from "@/convex/_generated/api";
+import { convexConfigured } from "@/lib/convex";
+import { PACKAGE_ID, formatSui, suiscanTx } from "@/lib/sui";
+import {
+  assertTxSuccess,
+  describeTxError,
+  isUserRejection,
+} from "@/lib/tx-errors";
 import type { PoolMeta } from "@/lib/pools";
 import {
   MATCH_SIM_CHANNEL,
@@ -22,12 +36,13 @@ import {
 } from "@/lib/match-sim";
 import {
   usePoolState,
+  poolStateKey,
   PHASE_LABEL,
   PHASE_DOT,
   type PoolState,
 } from "@/lib/hooks/use-pool-state";
-import { useMintCounts } from "@/lib/hooks/use-mint-counts";
-import { useMyPasses, type MyPass } from "@/lib/hooks/use-my-passes";
+import { useMintCounts, mintCountsKey } from "@/lib/hooks/use-mint-counts";
+import { useMyPasses, MY_PASSES_KEY, type MyPass } from "@/lib/hooks/use-my-passes";
 import { useRoster } from "@/lib/hooks/use-roster";
 import { fetchMatchday } from "@/lib/walrus";
 
@@ -40,8 +55,13 @@ import { CountryFlag } from "@/components/icons/country-flag";
 import { Crest } from "@/components/icons/crest";
 import {
   survivalLikelihood,
+  survivalWeight,
+  weightedPayout,
   estimateSurvivorCount,
   payoutIfSurvives,
+  payoutActual,
+  payoutBestCase,
+  PLATFORM_FEE_BPS,
 } from "@/lib/odds";
 import type { Player } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -69,13 +89,25 @@ const PHASE_TAGLINE: Record<number, string> = {
 
 export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
   const poolId = poolMeta.poolId ?? "0x0";
-  const matchdayBlobId = poolMeta.matchdayBlobId ?? "";
   const { data: pool, isLoading: poolLoading } = usePoolState(poolId);
   const counts = useMintCounts(poolId);
   const { data: passes } = useMyPasses();
-  const { data: roster, isLoading: rosterLoading } = useRoster(
-    poolMeta.rosterBlobId ?? "",
-  );
+
+  // Subscribe to the Convex matchday row for THIS pool so we pick up the new
+  // matchdayResultsBlobId the moment the admin presses "Publish + Settle"
+  // — without this, the prop is server-rendered + frozen at first render.
+  const matchdayRow = useConvexQuery(
+    api.matchdays.getByPool,
+    convexConfigured && poolId !== "0x0"
+      ? { poolObjectId: poolId }
+      : "skip",
+  ) as { rosterBlobId?: string; matchdayResultsBlobId?: string } | null | undefined;
+  const rosterBlobId =
+    matchdayRow?.rosterBlobId ?? poolMeta.rosterBlobId ?? "";
+  const matchdayBlobId =
+    matchdayRow?.matchdayResultsBlobId ?? poolMeta.matchdayBlobId ?? "";
+
+  const { data: roster, isLoading: rosterLoading } = useRoster(rosterBlobId);
 
   const { data: matchday } = useQuery({
     queryKey: ["matchday", poolMeta.slug, matchdayBlobId],
@@ -88,7 +120,8 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
 
-  // Match simulation — driven by the admin's "Run match" button via BroadcastChannel.
+  // Match simulation — driven by the admin's "Run match" button via either
+  // BroadcastChannel (same browser) OR a Convex live-query (any device).
   const [simStartedAt, setSimStartedAt] = useState<number | null>(null);
   const [simElapsed, setSimElapsed] = useState(0);
 
@@ -107,6 +140,38 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
     };
     return () => ch.close();
   }, []);
+
+  // Cross-device sim driver — Convex live-query. Picks up the latest run
+  // even if the admin is on a different browser / device.
+  const simRowsForDriver = useConvexQuery(
+    api.matchSim.latest,
+    convexConfigured && poolId !== "0x0"
+      ? { poolObjectId: poolId, limit: 200 }
+      : "skip",
+  ) as
+    | Array<{ type: string; payload: { startedAt: number } }>
+    | undefined;
+
+  useEffect(() => {
+    if (!simRowsForDriver || simRowsForDriver.length === 0) return;
+    let latestStart = 0;
+    let aborted = false;
+    for (const r of simRowsForDriver) {
+      const t = Number(r.payload?.startedAt ?? 0);
+      if (t > latestStart) {
+        latestStart = t;
+        aborted = false;
+      }
+      if (t === latestStart && r.type === "Sim:stop") aborted = true;
+    }
+    if (latestStart === 0) return;
+    if (aborted) {
+      setSimStartedAt(null);
+      setSimElapsed(0);
+      return;
+    }
+    setSimStartedAt((cur) => (cur === latestStart ? cur : latestStart));
+  }, [simRowsForDriver]);
 
   useEffect(() => {
     if (!simStartedAt) return;
@@ -214,7 +279,13 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
     : ranked;
 
   const estSurvivors = estimateSurvivorCount(roster.players, counts);
-  const payoutPerSurvivor = payoutIfSurvives(pool.pot_mist, estSurvivors);
+  const isSettled = pool.phase >= 2;
+  // Post-settle: header shows the AVERAGE net-pot share (the real per-pass
+  // payout is weighted per pick — computed per row below). Pre-settle: keep the
+  // estimate for "vibes" but every per-row number derives from `counts`.
+  const payoutPerSurvivor = isSettled
+    ? payoutActual(pool.net_pot_mist, pool.alive_count)
+    : payoutIfSurvives(pool.pot_mist, estSurvivors);
 
   return (
     <main className="min-h-screen">
@@ -227,6 +298,15 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
           fixtureLabel={poolMeta.name}
           survivorCount={simSurvivorCount}
           totalCount={roster.players.length}
+        />
+      )}
+
+      {/* Settled banner — shouts the match outcome the moment phase flips. */}
+      {isSettled && !simActive && (
+        <SettledBanner
+          aliveCount={pool.alive_count}
+          totalPasses={pool.total_passes}
+          potMist={pool.pot_mist}
         />
       )}
 
@@ -254,13 +334,14 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
             homeName="Phoenix XI"
             awayName="Eclipse XI"
             roster={roster.players}
+            poolId={poolId}
           />
         </div>
       </section>
 
       {/* Stats */}
       <section className="border-b border-zinc-900">
-        <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-10 md:py-12 grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8">
+        <div className="mx-auto max-w-[90rem] px-6 lg:px-12 pt-10 md:pt-12 pb-6 grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8">
           <BigNumber
             label="Prize Pool"
             value={formatSui(pool.pot_mist)}
@@ -277,7 +358,7 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
             unit={pool.phase >= 2 ? `/ ${pool.total_passes}` : undefined}
           />
           <BigNumber
-            label="Payout / survivor"
+            label={isSettled ? "Avg / survivor" : "Payout / survivor"}
             value={formatSui(payoutPerSurvivor)}
             unit="SUI"
           />
@@ -287,7 +368,25 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
             unit="SUI"
           />
         </div>
+        <div className="mx-auto max-w-[90rem] px-6 lg:px-12 pb-8 -mt-2">
+          <p className="text-xs text-zinc-500 leading-relaxed max-w-3xl">
+            Survivors split the prize pool in proportion to how unlikely each
+            pick was to survive — rarer survivals earn a bigger slice. A{" "}
+            {PLATFORM_FEE_BPS / 100}% platform fee is deducted from the pool
+            {isSettled ? " (already applied below)" : " at settlement"}.
+          </p>
+        </div>
       </section>
+
+      {/* Single-click withdrawal — cashes out every surviving pass at once. */}
+      {isSettled && (
+        <WithdrawPanel
+          poolId={poolId}
+          passes={myPasses}
+          roster={roster.players}
+          pool={pool}
+        />
+      )}
 
       {/* Toolbar */}
       <section className="border-b border-zinc-900">
@@ -318,7 +417,6 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
               myPlayerIds={myPlayerIds}
               passes={myPasses}
               roster={roster.players}
-              payoutPerSurvivor={payoutPerSurvivor}
               matchdayResults={matchdayResults}
             />
           ) : (
@@ -342,6 +440,163 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
         counts={counts}
       />
     </main>
+  );
+}
+
+/**
+ * Post-settle withdrawal banner. Sums the viewer's surviving passes into one
+ * weighted total and cashes them ALL out in a single transaction (one
+ * `cashout` move-call per pass batched in one PTB), so a winner withdraws once
+ * rather than pass-by-pass. Renders nothing if the viewer has no live winnings.
+ */
+function WithdrawPanel({
+  poolId,
+  passes,
+  roster,
+  pool,
+}: {
+  poolId: string;
+  passes: MyPass[];
+  roster: Player[];
+  pool: PoolState;
+}) {
+  const account = useCurrentAccount();
+  const client = useSuiClient();
+  const qc = useQueryClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const [status, setStatus] = useState<
+    "idle" | "signing" | "success" | "error"
+  >("idle");
+  const [digest, setDigest] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const playerMap = useMemo(
+    () => new Map(roster.map((p) => [p.id, p])),
+    [roster],
+  );
+
+  // Passes the viewer still owns whose player survived — the only ones the
+  // contract will let them cash out.
+  const survivingPasses = passes.filter(
+    (p) => !pool.eliminated_players.includes(p.player_id),
+  );
+  const total = survivingPasses.reduce((sum, p) => {
+    const player = playerMap.get(p.player_id);
+    if (!player) return sum;
+    return (
+      sum +
+      weightedPayout(
+        pool.net_pot_mist,
+        survivalWeight(player.difficulty),
+        pool.surviving_weight,
+      )
+    );
+  }, 0n);
+
+  if (survivingPasses.length === 0) return null;
+
+  const handleWithdraw = async () => {
+    if (!account) return;
+    if (PACKAGE_ID === "0x0" || poolId === "0x0") {
+      setStatus("error");
+      setError("Package or Pool ID not configured.");
+      return;
+    }
+    try {
+      setStatus("signing");
+      setError(null);
+
+      const tx = new Transaction();
+      for (const p of survivingPasses) {
+        tx.moveCall({
+          target: `${PACKAGE_ID}::pool::cashout`,
+          arguments: [tx.object(poolId), tx.object(p.id)],
+        });
+      }
+
+      const result = await signAndExecute({ transaction: tx });
+      await client.waitForTransaction({ digest: result.digest });
+      await assertTxSuccess(client, result.digest);
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: poolStateKey(poolId) }),
+        qc.invalidateQueries({ queryKey: mintCountsKey(poolId) }),
+        qc.invalidateQueries({ queryKey: MY_PASSES_KEY(account.address) }),
+      ]);
+
+      setDigest(result.digest);
+      setStatus("success");
+    } catch (e) {
+      if (isUserRejection(e)) {
+        setStatus("idle");
+        return;
+      }
+      // Force a fresh pool read so a stale UI doesn't keep offering a
+      // withdrawal the chain just rejected.
+      qc.refetchQueries({ queryKey: poolStateKey(poolId) });
+      setStatus("error");
+      setError(describeTxError(e) ?? "Withdrawal failed.");
+    }
+  };
+
+  const passLabel = `${survivingPasses.length} winning pass${
+    survivingPasses.length === 1 ? "" : "es"
+  }`;
+
+  return (
+    <section className="border-b border-hazard/40 bg-hazard/[0.03]">
+      <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-6 flex flex-col md:flex-row md:items-center gap-5">
+        <div className="flex-1 min-w-0">
+          <div className="text-utility text-hazard mb-1">
+            {status === "success" ? "✓ Withdrawn" : "Your winnings"}
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono tabular text-3xl md:text-4xl font-semibold text-zinc-100">
+              {formatSui(total)}
+            </span>
+            <span className="text-utility text-zinc-500">SUI</span>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500 leading-relaxed max-w-xl">
+            {passLabel} · weighted by survival odds. A {PLATFORM_FEE_BPS / 100}%
+            platform fee was already deducted from the pool. One click cashes out
+            every winning pass at once.
+          </p>
+          {error && (
+            <div className="mt-2 text-sm text-red-400 break-words">{error}</div>
+          )}
+        </div>
+
+        <div className="shrink-0">
+          {status === "success" && digest ? (
+            <a href={suiscanTx(digest)} target="_blank" rel="noopener noreferrer">
+              <Button variant="hazard" size="lg" bullet>
+                View transaction <ArrowUpRight className="size-4" />
+              </Button>
+            </a>
+          ) : !account ? (
+            <Button variant="outline" size="lg" disabled>
+              Connect wallet to withdraw
+            </Button>
+          ) : (
+            <Button
+              variant="hazard"
+              size="lg"
+              bullet
+              onClick={handleWithdraw}
+              disabled={status === "signing"}
+            >
+              {status === "signing" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Withdrawing…
+                </>
+              ) : (
+                <>Withdraw {formatSui(total)} SUI</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -419,7 +674,6 @@ function ListView({
   myPlayerIds,
   passes,
   roster,
-  payoutPerSurvivor,
   matchdayResults,
 }: {
   ranked: RankedPlayer[];
@@ -429,7 +683,6 @@ function ListView({
   myPlayerIds: Set<number>;
   passes: MyPass[];
   roster: Player[];
-  payoutPerSurvivor: bigint;
   matchdayResults: Record<number, MatchdayResult>;
 }) {
   return (
@@ -454,7 +707,6 @@ function ListView({
               totalPicks={totalPicks}
               pool={pool}
               isYours={myPlayerIds.has(r.player.id)}
-              payoutPerSurvivor={payoutPerSurvivor}
               matchdayResult={matchdayResults[r.player.id]}
             />
           ))}
@@ -468,12 +720,7 @@ function ListView({
 
       {/* Sidebar */}
       <div className="space-y-6">
-        <YourPicksPanel
-          passes={passes}
-          roster={roster}
-          pool={pool}
-          payoutPerSurvivor={payoutPerSurvivor}
-        />
+        <YourPicksPanel passes={passes} roster={roster} pool={pool} />
         <PulsePanel ranked={ranked} totalPicks={totalPicks} />
       </div>
     </div>
@@ -488,7 +735,6 @@ function LeaderboardRow({
   totalPicks,
   pool,
   isYours,
-  payoutPerSurvivor,
   matchdayResult,
 }: {
   rank: number;
@@ -498,7 +744,6 @@ function LeaderboardRow({
   totalPicks: number;
   pool: PoolState;
   isYours: boolean;
-  payoutPerSurvivor: bigint;
   matchdayResult?: MatchdayResult;
 }) {
   const isSettled = pool.phase >= 2;
@@ -509,6 +754,27 @@ function LeaderboardRow({
 
   const pct = totalPicks > 0 ? (count / totalPicks) * 100 : 0;
   const barWidth = maxCount > 0 ? (count / maxCount) * 100 : 0;
+
+  // Per-row payout:
+  //  • Post-settle survivors WITH picks: the weighted per-pass share of the
+  //    net pot (rarer survival ⇒ bigger slice). "your share" only when it's
+  //    the viewer's own pick; everyone else reads "per pass".
+  //  • Post-settle survivors with ZERO picks: nothing — nobody backed them, so
+  //    there's no share to show (this is the old "your share on un-picked
+  //    players" bug).
+  //  • Post-settle eliminated: nothing (the "Out" pill says it all).
+  //  • Pre-settle with picks: pot / count[player] — honest worst-case where
+  //    only this player's holders survive.
+  //  • Pre-settle with zero picks: no number (div-by-zero would confuse).
+  const showPayout = isSettled ? isSurvived && count > 0 : count > 0;
+  const rowPayout = isSettled
+    ? weightedPayout(
+        pool.net_pot_mist,
+        survivalWeight(player.difficulty),
+        pool.surviving_weight,
+      )
+    : payoutBestCase(pool.pot_mist, count);
+  const payoutLabel = isSettled ? (isYours ? "your share" : "per pass") : "best case";
 
   return (
     <div
@@ -565,10 +831,21 @@ function LeaderboardRow({
 
       {/* Payout estimate */}
       <div className="hidden md:flex flex-col items-end shrink-0 w-28">
-        <div className="text-utility text-zinc-600">if survives</div>
-        <div className="font-mono tabular text-sm text-hazard">
-          {formatSui(payoutPerSurvivor)} SUI
-        </div>
+        {showPayout ? (
+          <>
+            <div className="text-utility text-zinc-600">{payoutLabel}</div>
+            <div className="font-mono tabular text-sm text-hazard">
+              {formatSui(rowPayout)} SUI
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-utility text-zinc-700">
+              {isEliminated ? "—" : "no picks"}
+            </div>
+            <div className="font-mono tabular text-sm text-zinc-700">—</div>
+          </>
+        )}
       </div>
 
       {/* Bar */}
@@ -595,12 +872,10 @@ function YourPicksPanel({
   passes,
   roster,
   pool,
-  payoutPerSurvivor,
 }: {
   passes: MyPass[];
   roster: Player[];
   pool: PoolState;
-  payoutPerSurvivor: bigint;
 }) {
   if (passes.length === 0) {
     return (
@@ -645,6 +920,14 @@ function YourPicksPanel({
                 : pool.phase === 1
                   ? "Locked"
                   : "Pool closed";
+          const passPayout =
+            isSurvived && player
+              ? weightedPayout(
+                  pool.net_pot_mist,
+                  survivalWeight(player.difficulty),
+                  pool.surviving_weight,
+                )
+              : 0n;
           return (
             <Link
               key={p.id}
@@ -664,7 +947,7 @@ function YourPicksPanel({
               </div>
               {isSurvived && (
                 <div className="font-mono tabular text-xs text-hazard">
-                  {formatSui(payoutPerSurvivor)} SUI
+                  {formatSui(passPayout)} SUI
                 </div>
               )}
               <ArrowUpRight className="size-3.5 text-zinc-600 shrink-0" />
@@ -773,6 +1056,39 @@ function Empty({
     <div className="mx-auto max-w-2xl px-6 py-24 text-center">
       {title && <h1 className="text-display-md mb-4">{title}</h1>}
       <div className="text-zinc-400">{body}</div>
+    </div>
+  );
+}
+
+/**
+ * Top-of-page banner that flips on as soon as pool.phase >= 2. Tells the
+ * viewer the match has been played without needing them to scroll the
+ * leaderboard to figure out who survived.
+ */
+function SettledBanner({
+  aliveCount,
+  totalPasses,
+  potMist,
+}: {
+  aliveCount: number;
+  totalPasses: number;
+  potMist: bigint;
+}) {
+  const perSurvivor = payoutActual(potMist, aliveCount);
+  return (
+    <div className="sticky top-0 z-30 border-b border-emerald-500/40 bg-ink/85 backdrop-blur">
+      <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-3 flex items-center gap-4 flex-wrap">
+        <span className="inline-flex items-center gap-2 text-utility text-emerald-300">
+          <span className="size-2 rounded-full bg-emerald-400" />
+          SETTLED · matchday complete
+        </span>
+        <span className="text-utility text-zinc-300 tabular font-mono">
+          {aliveCount} / {totalPasses} survivors
+        </span>
+        <span className="ml-auto text-utility text-zinc-300 tabular font-mono">
+          {formatSui(perSurvivor)} SUI / survivor
+        </span>
+      </div>
     </div>
   );
 }

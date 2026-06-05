@@ -13,8 +13,15 @@ export const POOL_STATE_KEY = poolStateKey(POOL_OBJECT_ID);
 
 export interface PoolState {
   admin: string;
+  treasury: string;
+  fee_bps: number;
   entry_fee_mist: bigint;
   pot_mist: bigint;
+  /** Post-fee pot snapshot, set at settle. 0 before settle. */
+  net_pot_mist: bigint;
+  /** Summed weight of surviving passes, set at settle. The payout denominator. */
+  surviving_weight: number;
+  total_weight: number;
   total_passes: number;
   alive_count: number;
   phase: number;
@@ -71,8 +78,13 @@ export function usePoolState(poolId: string = POOL_OBJECT_ID) {
 
       return {
         admin: String(f.admin ?? ""),
+        treasury: String(f.treasury ?? ""),
+        fee_bps: Number(f.fee_bps ?? 0),
         entry_fee_mist: BigInt(String(f.entry_fee_mist ?? "0")),
         pot_mist: BigInt(potValue),
+        net_pot_mist: BigInt(String(f.net_pot_mist ?? "0")),
+        surviving_weight: Number(f.surviving_weight ?? 0),
+        total_weight: Number(f.total_weight ?? 0),
         total_passes: Number(f.total_passes ?? 0),
         alive_count: Number(f.alive_count ?? 0),
         phase: Number(f.phase ?? 0),

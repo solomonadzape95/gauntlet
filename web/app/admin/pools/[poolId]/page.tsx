@@ -252,6 +252,9 @@ function ActionPanel({
   const qc = useQueryClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const setMatchdayResults = useConvexMutation(api.matchdays.setResults);
+  const markEliminatedByPlayer = useConvexMutation(
+    api.passes.markEliminatedByPlayer,
+  );
   const [busy, setBusy] = useState<
     "lock" | "settle" | "close" | "publish" | null
   >(null);
@@ -329,6 +332,18 @@ function ActionPanel({
       const result = await signAndExecute({ transaction: tx });
       await client.waitForTransaction({ digest: result.digest });
       await assertTxSuccess(client, result.digest);
+
+      // Bulk-mark Convex passes "out" so the live page + pass page reflect
+      // the on-chain eliminations without waiting for a Sui event poll.
+      try {
+        await markEliminatedByPlayer({
+          poolObjectId: poolId,
+          eliminatedPlayerIds: matchday.eliminated_player_ids ?? [],
+        });
+      } catch (e) {
+        console.warn("markEliminatedByPlayer failed:", e);
+      }
+
       await invalidate();
       setLastDigest(result.digest);
     } catch (e) {
@@ -417,6 +432,17 @@ function ActionPanel({
       const result = await signAndExecute({ transaction: tx });
       await client.waitForTransaction({ digest: result.digest });
       await assertTxSuccess(client, result.digest);
+
+      // Bulk-mark Convex passes "out" so live + pass pages flip immediately.
+      try {
+        await markEliminatedByPlayer({
+          poolObjectId: poolId,
+          eliminatedPlayerIds: eliminated,
+        });
+      } catch (e) {
+        console.warn("markEliminatedByPlayer failed:", e);
+      }
+
       await invalidate();
       setLastDigest(result.digest);
     } catch (e) {

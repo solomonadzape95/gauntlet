@@ -1,6 +1,9 @@
 export const PACKAGE_ID = process.env.NEXT_PUBLIC_GAUNTLET_PACKAGE_ID ?? "0x0";
 export const POOL_OBJECT_ID = process.env.NEXT_PUBLIC_POOL_OBJECT_ID ?? "0x0";
 export const ADMIN_ADDRESS = process.env.NEXT_PUBLIC_ADMIN_ADDRESS ?? "0x0";
+/** Receives the platform fee skimmed at settle. Falls back to the admin address. */
+export const TREASURY_ADDRESS =
+  process.env.NEXT_PUBLIC_TREASURY_ADDRESS ?? ADMIN_ADDRESS;
 export const ROSTER_BLOB_ID = process.env.NEXT_PUBLIC_ROSTER_BLOB_ID ?? "";
 export const MATCHDAY_BLOB_ID = process.env.NEXT_PUBLIC_MATCHDAY_BLOB_ID ?? "";
 

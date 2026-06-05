@@ -11,6 +11,8 @@
  */
 
 import type { Player, Difficulty } from "@/lib/types";
+import { convex, convexConfigured } from "@/lib/convex";
+import { api } from "@/convex/_generated/api";
 
 export const SIM_DURATION_MS = 60_000;
 
@@ -196,13 +198,25 @@ export function scheduleMatchEvents(
   const { speed = 1, onEvent, onComplete } = opts;
   const ch = new BroadcastChannel(MATCH_SIM_CHANNEL);
   const timers: ReturnType<typeof setTimeout>[] = [];
+  const durationMs = (doc.duration_sec * 1000) / speed;
 
+  // Same-browser transport — instant, zero latency.
   ch.postMessage({
     type: "start",
     poolId,
     startedAt,
-    durationMs: (doc.duration_sec * 1000) / speed,
+    durationMs,
   } satisfies MatchSimEvent);
+  // Cross-device transport — Convex live-query so any tab/device renders.
+  if (convexConfigured) {
+    convex
+      .mutation(api.matchSim.startSim, {
+        poolObjectId: poolId,
+        startedAt,
+        durationMs,
+      })
+      .catch((e) => console.warn("[match-sim] startSim failed:", e));
+  }
 
   for (const event of doc.events) {
     const delay = (event.t_sec * 1000) / speed;
@@ -213,6 +227,15 @@ export function scheduleMatchEvents(
         startedAt,
         event,
       } satisfies MatchSimEvent);
+      if (convexConfigured) {
+        convex
+          .mutation(api.matchSim.recordSimEvent, {
+            poolObjectId: poolId,
+            startedAt,
+            event,
+          })
+          .catch((e) => console.warn("[match-sim] recordSimEvent failed:", e));
+      }
       onEvent?.(event);
       if (event.type === "fulltime") onComplete?.();
     }, delay);
@@ -227,6 +250,14 @@ export function scheduleMatchEvents(
         poolId,
         startedAt,
       } satisfies MatchSimEvent);
+      if (convexConfigured) {
+        convex
+          .mutation(api.matchSim.stopSim, {
+            poolObjectId: poolId,
+            startedAt,
+          })
+          .catch((e) => console.warn("[match-sim] stopSim failed:", e));
+      }
       ch.close();
     },
   };
