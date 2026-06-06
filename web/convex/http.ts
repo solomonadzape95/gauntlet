@@ -156,7 +156,7 @@ function toEvent(raw: unknown): NormalizedEvent | null {
 function summarizeForDiscord(events: NormalizedEvent[]): string {
   const lines = events.slice(0, 3).map((e) => {
     const tx = e.txDigest
-      ? `https://suiscan.xyz/testnet/tx/${e.txDigest}`
+      ? `https://suiscan.xyz/mainnet/tx/${e.txDigest}`
       : "";
     return `🟧 **${e.type}**${e.sender ? ` · ${shortHex(e.sender)}` : ""}${tx ? `\n${tx}` : ""}`;
   });

@@ -4,12 +4,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function upstreamUrl(): string {
-  // Server-only env first (recommended — keeps the Tatum key off the wire).
-  // NEXT_PUBLIC_* fallback for compatibility with existing .env.local files.
+  // MAINNET. Server-only env first (keeps any provider key off the wire).
+  // Set SUI_RPC_URL to a mainnet endpoint (public fullnode, or a Tatum/QuickNode
+  // mainnet gateway). Falls back to the public mainnet fullnode.
   return (
-    process.env.TATUM_SUI_TESTNET_RPC ??
-    process.env.NEXT_PUBLIC_TATUM_SUI_TESTNET_RPC ??
-    "https://fullnode.testnet.sui.io:443"
+    process.env.SUI_RPC_URL ??
+    process.env.TATUM_SUI_MAINNET_RPC ??
+    "https://fullnode.mainnet.sui.io:443"
   );
 }
 

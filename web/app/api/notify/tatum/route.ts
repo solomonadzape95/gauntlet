@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const SUISCAN_BASE = "https://suiscan.xyz/testnet";
+const SUISCAN_BASE = "https://suiscan.xyz/mainnet";
 
 /**
  * In-memory replay cache. Tatum sometimes redelivers events; we keep a sliding
@@ -174,7 +174,7 @@ function buildEmbed(ev: NormalizedEvent): DiscordEmbed {
     case "PoolCreated":
       return {
         title: "🆕  Pool created",
-        description: `New shared object on testnet.`,
+        description: `New shared object on mainnet.`,
         color: 0xf5ff00,
         url,
         footer: { text: ev.digest.slice(0, 18) + "…" },

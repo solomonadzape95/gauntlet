@@ -2,7 +2,7 @@ import type { RosterData, MatchdayData } from "./types";
 
 const AGGREGATOR =
   process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR ??
-  "https://aggregator.walrus-testnet.walrus.space";
+  "https://aggregator.walrus-mainnet.walrus.space";
 
 export function walrusUrl(blobId: string) {
   return `${AGGREGATOR}/v1/blobs/${blobId}`;

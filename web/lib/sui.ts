@@ -10,7 +10,7 @@ export const MATCHDAY_BLOB_ID = process.env.NEXT_PUBLIC_MATCHDAY_BLOB_ID ?? "";
 export const CLOCK_ID = "0x6";
 export const ENTRY_FEE_MIST = 100_000_000n; // 0.1 SUI
 
-export const SUISCAN_BASE = "https://suiscan.xyz/testnet";
+export const SUISCAN_BASE = "https://suiscan.xyz/mainnet";
 
 export function suiscanTx(digest: string) {
   return `${SUISCAN_BASE}/tx/${digest}`;

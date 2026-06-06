@@ -26,7 +26,7 @@ export const pollEvents = action({
       process.env.GAUNTLET_PACKAGE_ID ??
       process.env.NEXT_PUBLIC_GAUNTLET_PACKAGE_ID;
     const rpcUrl =
-      process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443";
+      process.env.SUI_RPC_URL ?? "https://fullnode.mainnet.sui.io:443";
 
     if (!pkg || pkg === "0x0") {
       console.warn("[sui_actions.pollEvents] package id not configured; skip");

@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 const PUBLISHER =
   process.env.WALRUS_PUBLISHER ??
   process.env.NEXT_PUBLIC_WALRUS_PUBLISHER ??
-  "https://publisher.walrus-testnet.walrus.space";
+  "https://publisher.walrus-mainnet.walrus.space";
 
 interface WalrusUploadResponse {
   newlyCreated?: { blobObject: { blobId: string } };

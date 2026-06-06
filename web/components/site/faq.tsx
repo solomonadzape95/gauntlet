@@ -36,7 +36,7 @@ const FAQS: QA[] = [
   },
   {
     q: "What do I need to play?",
-    a: "A Sui wallet and some testnet SUI. Connect it, pick a player, mint a pass — that's the whole flow.",
+    a: "A Sui wallet with a little SUI for the entry fee and gas. Connect it, pick a player, mint a pass — that's the whole flow.",
   },
 ];
 
