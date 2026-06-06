@@ -150,7 +150,7 @@ export default function AdminPoolDetailPage({
           >
             ← All pools
           </Link>
-          <div className="text-utility text-zinc-500 mb-3 inline-flex items-center gap-2">
+          <div className="text-utility text-zinc-500 mb-3 flex items-center gap-2">
             <StatusDot status={phaseDot} />
             Pool phase: {phaseLabel}
             {matchdayRow && (
