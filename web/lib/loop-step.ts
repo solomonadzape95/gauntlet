@@ -22,14 +22,24 @@ export interface LoopStep {
   etaMs: number | null;
 }
 
-/** Current step + countdown target, or null when the loop is off / done. */
-export function loopStepInfo(row: LoopRow | null | undefined): LoopStep | null {
+/**
+ * Current step + countdown target, or null when the loop is off / done.
+ * Pass `totalPasses` so the open-phase clock only runs once a pool has at least
+ * one entry — an empty pool never counts down (and the loop won't lock it).
+ */
+export function loopStepInfo(
+  row: LoopRow | null | undefined,
+  totalPasses?: number,
+): LoopStep | null {
   if (!row || !row.enabled) return null;
   switch (row.status) {
-    case "open":
-      return row.lastMintAtMs
-        ? { label: "Pool locks", etaMs: row.lastMintAtMs + row.lockDelayMs }
-        : { label: "Locks after the first entry", etaMs: null };
+    case "open": {
+      const hasEntry =
+        (totalPasses === undefined || totalPasses >= 1) && !!row.lastMintAtMs;
+      return hasEntry
+        ? { label: "Pool locks", etaMs: row.lastMintAtMs! + row.lockDelayMs }
+        : { label: "Waiting for the first entry", etaMs: null };
+    }
     case "locked":
       // Once the sim has started we're counting to settle; before that, kickoff.
       return row.simStartedAtMs

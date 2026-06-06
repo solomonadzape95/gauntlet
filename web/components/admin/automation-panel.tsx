@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { convexConfigured } from "@/lib/convex";
 import { TREASURY_ADDRESS } from "@/lib/sui";
 import { loopStepInfo, formatCountdown } from "@/lib/loop-step";
+import { usePoolState } from "@/lib/hooks/use-pool-state";
 import { Button } from "@/components/ui/button";
 
 interface AutomationRow {
@@ -66,7 +67,8 @@ export function AutomationPanel({ poolId }: { poolId: string }) {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const loopStep = row ? loopStepInfo(row) : null;
+  const { data: poolState } = usePoolState(poolId);
+  const loopStep = row ? loopStepInfo(row, poolState?.total_passes) : null;
   const stepCountdown =
     loopStep && loopStep.etaMs !== null
       ? formatCountdown(loopStep.etaMs - now)

@@ -352,7 +352,7 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
         !simActive &&
         !isSettled &&
         (pool.phase === 0 || pool.phase === 1) && (
-          <LoopStatusBanner row={automation} />
+          <LoopStatusBanner row={automation} totalPasses={pool.total_passes} />
         )}
 
       {/* Settled banner — shouts the match outcome the moment phase flips. */}
@@ -1101,14 +1101,20 @@ function SettledBanner({
  * everyone watching can see what happens next. Each new entry resets the lock
  * clock, so the open countdown can tick back up.
  */
-function LoopStatusBanner({ row }: { row: LoopRow }) {
+function LoopStatusBanner({
+  row,
+  totalPasses,
+}: {
+  row: LoopRow;
+  totalPasses: number;
+}) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const step = loopStepInfo(row);
+  const step = loopStepInfo(row, totalPasses);
   if (!step) return null;
   const mmss = step.etaMs !== null ? formatCountdown(step.etaMs - now) : null;
 
