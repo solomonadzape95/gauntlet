@@ -53,13 +53,29 @@ function signer(): Ed25519Keypair {
   return Ed25519Keypair.fromSecretKey(secretKey);
 }
 
+/** A fetch that retries on 429 with exponential backoff, so every SDK RPC call
+ *  (gas price, coins, execute, confirm, getObject…) rides out rate limiting. */
+function retryingFetch(): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(input, init);
+      if (res.status !== 429 || attempt >= 6) return res;
+      await new Promise((r) => setTimeout(r, 400 * 2 ** attempt)); // 0.4→25.6s
+    }
+  }) as typeof fetch;
+}
+
 function client(): SuiClient {
   const url = process.env.SUI_RPC_URL ?? "https://fullnode.mainnet.sui.io:443";
   const headers = process.env.TATUM_API_KEY
     ? { "x-api-key": process.env.TATUM_API_KEY }
     : undefined;
   return new SuiClient({
-    transport: new SuiHTTPTransport({ url, ...(headers ? { rpc: { headers } } : {}) }),
+    transport: new SuiHTTPTransport({
+      url,
+      fetch: retryingFetch(),
+      ...(headers ? { rpc: { headers } } : {}),
+    }),
   });
 }
 
