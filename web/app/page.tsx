@@ -1,6 +1,7 @@
 import { TopBar } from "@/components/site/top-bar";
 import { HeroCollage } from "@/components/site/hero-collage";
 import { HowItWorks } from "@/components/site/how-it-works";
+import { Faq } from "@/components/site/faq";
 import { Marquee } from "@/components/ui/marquee";
 import { BigNumber } from "@/components/ui/big-number";
 import { HardRule } from "@/components/ui/hard-rule";
@@ -46,6 +47,8 @@ export default function Home() {
       <Marquee items={MARQUEE} />
 
       <HowItWorks />
+
+      <Faq />
 
       <footer>
         <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-10 flex flex-wrap items-center justify-between gap-6">

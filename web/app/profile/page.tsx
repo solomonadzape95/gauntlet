@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useMutation, useQuery } from "convex/react";
 import { useRoster } from "@/lib/hooks/use-roster";
+import { usePoolState } from "@/lib/hooks/use-pool-state";
 import {
   ArrowUpRight,
   Check,
@@ -398,9 +399,19 @@ function PassRow({ row, cashed }: { row: PassRow; cashed: boolean }) {
   const { data: roster } = useRoster(matchday?.rosterBlobId ?? "");
   const playerName = roster?.players.find((p) => p.id === row.playerId)?.name;
 
-  // A cashout burns the pass, so a recorded cashout is the source of truth even
-  // if the projected pass status briefly drifted.
-  const status: "alive" | "out" | "cashed" = cashed ? "cashed" : row.status;
+  // Status is derived from the pass's OWN pool on-chain, not the stored convex
+  // field (which can lag a settle) — so an eliminated player never shows as
+  // alive. A recorded cashout wins outright (the pass is burned).
+  const { data: chainPool } = usePoolState(row.poolObjectId);
+  const eliminatedOnChain =
+    !!chainPool &&
+    chainPool.phase >= 2 &&
+    chainPool.eliminated_players.includes(row.playerId);
+  const status: "alive" | "out" | "cashed" = cashed
+    ? "cashed"
+    : eliminatedOnChain
+      ? "out"
+      : row.status;
 
   return (
     <li className="px-5 py-4 grid grid-cols-12 items-center gap-3">

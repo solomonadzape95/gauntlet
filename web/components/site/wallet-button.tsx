@@ -205,11 +205,11 @@ function PassesPanel({ onNavigate }: { onNavigate: () => void }) {
       </div>
       <div className="px-5 pt-3 pb-4 border-t border-zinc-900">
         <Link
-          href="/me"
+          href="/profile"
           onClick={onNavigate}
           className="text-utility text-zinc-500 hover:text-hazard transition-colors inline-flex items-center gap-1.5"
         >
-          View all on the My Passes page <ArrowUpRight className="size-3" />
+          View all on your profile <ArrowUpRight className="size-3" />
         </Link>
       </div>
     </Panel>

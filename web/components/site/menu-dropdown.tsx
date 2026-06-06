@@ -16,9 +16,9 @@ interface MenuItem {
 const ITEMS: MenuItem[] = [
   { href: "/pools", label: "Pools", description: "Every survival pool, live and upcoming." },
   { href: "/live", label: "Live", description: "Real-time pot, picks, and survivor heat." },
-  { href: "/me", label: "My Passes", description: "Every pass you hold, status by status." },
-  { href: "/profile", label: "Profile", description: "Your name, cashouts, tournaments you've played." },
+  { href: "/profile", label: "Profile", description: "Your passes, cashouts, and tournaments — all in one place." },
   { href: "/#how", label: "How it works", description: "Four moves between you and the pot." },
+  { href: "/#faq", label: "FAQ", description: "Targets, payouts, fees, and where your money sits." },
 ];
 
 export function MenuDropdown() {

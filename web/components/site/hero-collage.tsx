@@ -95,9 +95,10 @@ export function HeroCollage() {
             className="col-span-12 md:col-span-5 lg:col-span-4"
           >
             <p className="text-base md:text-lg text-zinc-300 leading-relaxed max-w-lg">
-              An on‑chain survival pool where AI sets each player's stat target
-              before kickoff. Pick one — if they hit it, your pass survives and
-              the pot grows.
+              Every player has one target to hit this matchday. Back the one you
+              trust with 0.1 SUI. If they deliver, you&apos;re through and split
+              the pot. If they don&apos;t, your stake stays in for the ones who
+              made it.
             </p>
           </motion.div>
           <div className="col-span-12 md:col-span-7 lg:col-span-8">

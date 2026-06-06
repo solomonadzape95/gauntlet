@@ -7,6 +7,7 @@ import type { Player } from "@/lib/types";
 import type { PoolState } from "@/lib/hooks/use-pool-state";
 import { CountryFlag } from "@/components/icons/country-flag";
 import { Crest } from "@/components/icons/crest";
+import { PlayerJersey } from "@/components/jersey/player-jersey";
 import { targetIcons } from "@/lib/target-icons";
 import { formatSui } from "@/lib/sui";
 import {
@@ -259,6 +260,11 @@ function ComparisonCard({
 
   return (
     <div className="border border-zinc-900 p-5">
+      <PlayerJersey
+        player={player}
+        className="aspect-[4/3] mb-4 border border-zinc-800"
+      />
+
       <div className="flex items-center gap-2 mb-3">
         <CountryFlag country={player.country ?? player.team} width={22} />
         <Crest club={player.club} size={20} />

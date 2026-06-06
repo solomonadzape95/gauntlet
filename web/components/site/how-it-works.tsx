@@ -14,22 +14,22 @@ const STEPS: Step[] = [
   {
     step: "01",
     title: "Pick a player.",
-    body: "Browse the 16-player roster. The AI Game Master has already assigned every player a stat target — stars carry brutal ones, workhorses carry reachable ones.",
+    body: "Scroll the roster. Every player already has one target to clear this matchday — a striker might need a goal, a keeper four saves. Harder targets draw fewer backers, so they pay more.",
   },
   {
     step: "02",
     title: "Stake 0.1 SUI.",
-    body: "Mint a Survival Pass NFT tied to your chosen player. Your stake joins the pot. The pool stays open right up to kickoff.",
+    body: "Minting a Survival Pass drops your stake in the pot and ties the pass to your player. Back as many players as you like, right up to kickoff.",
   },
   {
     step: "03",
-    title: "The match happens.",
-    body: "Real-world stats land on Walrus. The contract reads them and resolves who survives. Eliminated stakes lock into the pot for the survivors.",
+    title: "The match decides.",
+    body: "When the whistle goes, the real stats are written to Walrus and the contract checks them. Hit your target and you're through. Miss and you're out — your stake stays in for the survivors.",
   },
   {
     step: "04",
-    title: "Cash out or ride.",
-    body: "Survivors split the pot — the fewer left, the bigger each slice. Take the guaranteed share, or let it ride for a fatter multiplier next matchday.",
+    title: "Take your cut.",
+    body: "Survivors split the pot, weighted so the longer the odds you beat, the bigger your slice. Cash out every winning pass in one click. We keep 10%.",
   },
 ];
 
