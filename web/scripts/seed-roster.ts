@@ -19,7 +19,7 @@
  * Env (loaded from web/.env.local automatically):
  *   API_FOOTBALL_KEY        Required. Free key at dashboard.api-football.com.
  *   GEMINI_API_KEY          Optional. If missing, falls back to a deterministic target generator.
- *   NEXT_PUBLIC_WALRUS_PUBLISHER  Used by upload-walrus; has a public testnet default.
+ *   NEXT_PUBLIC_WALRUS_PUBLISHER  Used by upload-walrus; defaults to the public Walrus MAINNET publisher.
  */
 
 import { promises as fs } from "node:fs";
@@ -673,11 +673,14 @@ async function main() {
   } else {
     console.log("[seed-roster] Uploading to Walrus…");
     const blobId = await uploadJsonToWalrus(roster);
-    console.log("\n  ┌─ Walrus blob created");
+    console.log("\n  ┌─ Walrus blob created (mainnet)");
     console.log(`  │  blob id: ${blobId}`);
-    console.log("  └─ Update web/.env.local:");
-    console.log(`     NEXT_PUBLIC_ROSTER_BLOB_ID=${blobId}`);
-    console.log(`  └─ And set rosterBlobId for 'genesis-wc' in web/lib/pools.ts.`);
+    console.log("  └─ Wire it into the tournament's player pool, either via:");
+    console.log("       • Admin → Rosters (upload/attach to the tournament), or");
+    console.log("       • the Convex seed (prod):");
+    console.log(
+      `         npx convex run seed:default --prod '{"adminAddress":"<admin>","lastElevenRosterBlobId":"${blobId}"}'`,
+    );
   }
 
   console.log(`\n[seed-roster] Done in ${((Date.now() - t0) / 1000).toFixed(1)}s.`);

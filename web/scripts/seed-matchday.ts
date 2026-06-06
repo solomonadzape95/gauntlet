@@ -351,11 +351,12 @@ async function main() {
 
   console.log("[seed-matchday] Uploading to Walrus…");
   const blobId = await uploadJsonToWalrus(raw);
-  console.log("\n  ┌─ Walrus blob created");
+  console.log("\n  ┌─ Walrus blob created (mainnet)");
   console.log(`  │  blob id: ${blobId}`);
-  console.log("  └─ Update web/.env.local:");
-  console.log(`     NEXT_PUBLIC_MATCHDAY_BLOB_ID=${blobId}`);
-  console.log("  └─ Also set matchdayBlobId for 'genesis-wc' in web/lib/pools.ts.");
+  console.log("  └─ Normally you publish results from Admin → the pool's");
+  console.log("     'Publish + Settle' button (uploads + attaches automatically).");
+  console.log("     To attach this pre-generated blob manually, set it on the");
+  console.log("     matchday row via matchdays.setResults (matchdayResultsBlobId).");
 }
 
 main().catch((e) => {

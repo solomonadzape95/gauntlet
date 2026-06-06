@@ -11,12 +11,17 @@ import { v } from "convex/values";
  * carry an on-chain `poolObjectId` are protected — they're patched but
  * never deleted (so a live pool can't be silently orphaned).
  *
- *   pnpm dlx convex run seed:default '{"adminAddress":"0x..."}'
+ *   npx convex run seed:default '{"adminAddress":"0x..."}'
+ *
+ * For PRODUCTION, target the prod deployment with --prod (env vars + data are
+ * per-deployment, so prod must be seeded separately from dev):
+ *
+ *   npx convex run --prod seed:default '{"adminAddress":"0x..."}'
  *
  * Re-run with the on-chain Pool id + Walrus roster id to flip Last Eleven's
  * MD1 from "soon" to "live":
  *
- *   pnpm dlx convex run seed:default '{
+ *   npx convex run --prod seed:default '{
  *     "adminAddress":"0x...",
  *     "lastElevenPoolId":"0xPOOL",
  *     "lastElevenRosterBlobId":"BLOBID"
