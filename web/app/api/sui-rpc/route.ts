@@ -18,10 +18,17 @@ export async function POST(req: NextRequest) {
   const body = await req.text();
   const url = upstreamUrl();
 
+  // Tatum's *.gateway.tatum.io endpoints authenticate via x-api-key. Public
+  // fullnodes ignore the header, so it's safe to send whenever the key is set.
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (process.env.TATUM_API_KEY) headers["x-api-key"] = process.env.TATUM_API_KEY;
+
   try {
     const upstream = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body,
       cache: "no-store",
     });

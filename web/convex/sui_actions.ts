@@ -45,11 +45,17 @@ export const pollEvents = action({
       ],
     };
 
+    // Tatum gateway endpoints need x-api-key; public fullnodes ignore it.
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (process.env.TATUM_API_KEY) headers["x-api-key"] = process.env.TATUM_API_KEY;
+
     let res: Response;
     try {
       res = await fetch(rpcUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(body),
       });
     } catch (e) {
