@@ -66,6 +66,7 @@ import {
   PLATFORM_FEE_BPS,
 } from "@/lib/odds";
 import type { Player } from "@/lib/types";
+import { loopStepInfo, formatCountdown, type LoopRow } from "@/lib/loop-step";
 import { cn } from "@/lib/cn";
 
 import { CompareModal } from "./compare-modal";
@@ -109,7 +110,16 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
     api.automation.forPool,
     convexConfigured && poolId !== "0x0" ? { poolObjectId: poolId } : "skip",
   ) as
-    | { enabled: boolean; status: string; lockDelayMs: number; lastMintAtMs?: number }
+    | {
+        enabled: boolean;
+        status: string;
+        lockDelayMs: number;
+        simDelayMs: number;
+        settleDelayMs: number;
+        lastMintAtMs?: number;
+        lockedAtMs?: number;
+        simStartedAtMs?: number;
+      }
     | null
     | undefined;
 
@@ -336,17 +346,14 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
         />
       )}
 
-      {/* Auto-lock countdown — only while open and the loop is driving this pool. */}
-      {pool.phase === 0 && !simActive && automation?.enabled && (
-        <AutoLockBanner
-          lockAtMs={
-            automation.lastMintAtMs
-              ? automation.lastMintAtMs + automation.lockDelayMs
-              : null
-          }
-          lockDelaySec={Math.round(automation.lockDelayMs / 1000)}
-        />
-      )}
+      {/* Autonomous-loop step countdown — open + pre-kickoff. During the sim
+          the SimBanner takes over; after settle the SettledBanner does. */}
+      {automation?.enabled &&
+        !simActive &&
+        !isSettled &&
+        (pool.phase === 0 || pool.phase === 1) && (
+          <LoopStatusBanner row={automation} />
+        )}
 
       {/* Settled banner — shouts the match outcome the moment phase flips. */}
       {isSettled && !simActive && (
@@ -1089,29 +1096,21 @@ function SettledBanner({
  * progress sliver at the very top showing elapsed / total.
  */
 /**
- * Public auto-lock countdown. While the pool is open and the autonomous loop is
- * driving it, the pool locks `lockDelay` after the LAST mint — so every new
- * entry resets this clock. Shows the running countdown (or a "first entry"
- * prompt when nobody's minted yet).
+ * Public autonomous-loop status strip. Shows the step in progress and a live
+ * countdown — "Pool locks in M:SS" (open) or "Kickoff in M:SS" (locked) — so
+ * everyone watching can see what happens next. Each new entry resets the lock
+ * clock, so the open countdown can tick back up.
  */
-function AutoLockBanner({
-  lockAtMs,
-  lockDelaySec,
-}: {
-  lockAtMs: number | null;
-  lockDelaySec: number;
-}) {
+function LoopStatusBanner({ row }: { row: LoopRow }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const remainingSec = lockAtMs ? Math.max(0, Math.ceil((lockAtMs - now) / 1000)) : null;
-  const mmss =
-    remainingSec === null
-      ? null
-      : `${Math.floor(remainingSec / 60)}:${String(remainingSec % 60).padStart(2, "0")}`;
+  const step = loopStepInfo(row);
+  if (!step) return null;
+  const mmss = step.etaMs !== null ? formatCountdown(step.etaMs - now) : null;
 
   return (
     <div className="sticky top-0 z-30 border-b border-hazard/40 bg-ink/85 backdrop-blur">
@@ -1120,15 +1119,12 @@ function AutoLockBanner({
           <span aria-hidden className="size-2 rounded-full bg-hazard animate-pulse" />
           AUTO
         </span>
-        {mmss ? (
-          <span className="text-utility text-zinc-300 tabular font-mono">
-            Locks in {mmss} — each new entry resets the clock
-          </span>
-        ) : (
-          <span className="text-utility text-zinc-400">
-            Locks {lockDelaySec}s after the first entry. Get a pick in to start the clock.
-          </span>
-        )}
+        <span className="text-utility text-zinc-300 tabular font-mono">
+          {mmss ? `${step.label} in ${mmss}` : step.label}
+          {row.status === "open" && mmss && (
+            <span className="text-zinc-500"> — each new entry resets it</span>
+          )}
+        </span>
         <span className="ml-auto text-utility text-zinc-500 hidden md:inline">
           Match runs automatically · winners withdraw after settle
         </span>

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { Loader2, Bot, Play } from "lucide-react";
+import { Loader2, Bot, Play, Timer } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import { convexConfigured } from "@/lib/convex";
 import { TREASURY_ADDRESS } from "@/lib/sui";
+import { loopStepInfo, formatCountdown } from "@/lib/loop-step";
 import { Button } from "@/components/ui/button";
 
 interface AutomationRow {
@@ -18,6 +19,8 @@ interface AutomationRow {
   simDelayMs: number;
   settleDelayMs: number;
   lastMintAtMs?: number;
+  lockedAtMs?: number;
+  simStartedAtMs?: number;
   lastError?: string;
   spawnedChildPool?: string;
 }
@@ -56,6 +59,18 @@ export function AutomationPanel({ poolId }: { poolId: string }) {
   const [busy, setBusy] = useState<"enroll" | "toggle" | "save" | "step" | null>(null);
   const [stepResult, setStepResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 1s ticker for the live step countdown.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const loopStep = row ? loopStepInfo(row) : null;
+  const stepCountdown =
+    loopStep && loopStep.etaMs !== null
+      ? formatCountdown(loopStep.etaMs - now)
+      : null;
 
   const enroll = async () => {
     if (!md) return;
@@ -170,6 +185,21 @@ export function AutomationPanel({ poolId }: { poolId: string }) {
         </div>
       ) : (
         <div className="mt-5 space-y-4">
+          {/* Live step countdown */}
+          <div className="flex items-center gap-2 border border-zinc-800 bg-ink px-4 py-3">
+            <Timer className="size-4 text-hazard shrink-0" />
+            {row.enabled && loopStep ? (
+              <span className="text-base text-zinc-100 tabular font-mono">
+                {loopStep.label}
+                {stepCountdown ? ` in ${stepCountdown}` : ""}
+              </span>
+            ) : (
+              <span className="text-utility text-zinc-500">
+                {row.enabled ? "Idle" : "Loop stopped"}
+              </span>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-end gap-3">
             <Button
               variant={row.enabled ? "outline" : "hazard"}
@@ -180,7 +210,7 @@ export function AutomationPanel({ poolId }: { poolId: string }) {
               {busy === "toggle" ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : row.enabled ? (
-                "Pause loop"
+                "Stop loop"
               ) : (
                 "Start loop"
               )}
