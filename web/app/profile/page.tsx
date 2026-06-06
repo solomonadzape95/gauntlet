@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useMutation, useQuery } from "convex/react";
+import { useRoster } from "@/lib/hooks/use-roster";
 import {
   ArrowUpRight,
   Check,
@@ -82,6 +83,25 @@ export default function ProfilePage() {
     convexConfigured && address ? { ownerAddress: address } : "skip",
   ) as CashoutRow[] | undefined;
 
+  // A pass burns on cashout, so there's exactly one real cashout per passId.
+  // Dedup by passId so the counters/list stay correct even if old duplicate
+  // rows linger from before the projection was made idempotent.
+  const dedupedCashouts = useMemo(() => {
+    if (!cashouts) return undefined;
+    const seen = new Set<string>();
+    const out: CashoutRow[] = [];
+    for (const c of cashouts) {
+      if (seen.has(c.passId)) continue;
+      seen.add(c.passId);
+      out.push(c);
+    }
+    return out;
+  }, [cashouts]);
+  const cashedPassIds = useMemo(
+    () => new Set((dedupedCashouts ?? []).map((c) => c.passId)),
+    [dedupedCashouts],
+  );
+
   if (!account) {
     return (
       <main className="min-h-screen">
@@ -120,21 +140,30 @@ export default function ProfilePage() {
             value={
               passes === undefined
                 ? "…"
-                : String(passes.filter((p) => p.status === "alive").length)
+                : String(
+                    passes.filter(
+                      (p) =>
+                        p.status === "alive" && !cashedPassIds.has(p.passId),
+                    ).length,
+                  )
             }
             accent
           />
           <Counter
             label="Cashed out"
-            value={cashouts === undefined ? "…" : String(cashouts.length)}
+            value={
+              dedupedCashouts === undefined
+                ? "…"
+                : String(dedupedCashouts.length)
+            }
           />
           <Counter
             label="Total winnings"
             value={
-              cashouts === undefined
+              dedupedCashouts === undefined
                 ? "…"
                 : formatSui(
-                    cashouts.reduce(
+                    dedupedCashouts.reduce(
                       (sum, c) => sum + BigInt(c.amountMist),
                       0n,
                     ),
@@ -171,7 +200,11 @@ export default function ProfilePage() {
           {passes && passes.length > 0 && (
             <ul className="border border-zinc-900 divide-y divide-zinc-900">
               {passes.map((p) => (
-                <PassRow key={p._id} row={p} />
+                <PassRow
+                  key={p._id}
+                  row={p}
+                  cashed={cashedPassIds.has(p.passId)}
+                />
               ))}
             </ul>
           )}
@@ -182,19 +215,19 @@ export default function ProfilePage() {
       <section className="border-b border-zinc-900">
         <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-10 md:py-12">
           <div className="text-utility text-zinc-500 mb-5">Cashouts</div>
-          {cashouts === undefined && (
+          {dedupedCashouts === undefined && (
             <div className="border border-zinc-900 p-5 inline-flex items-center gap-2 text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Loading…
             </div>
           )}
-          {cashouts && cashouts.length === 0 && (
+          {dedupedCashouts && dedupedCashouts.length === 0 && (
             <div className="border border-zinc-900 p-6 text-zinc-500">
               No cashouts yet. Hit a target, survive a matchday, claim a share.
             </div>
           )}
-          {cashouts && cashouts.length > 0 && (
+          {dedupedCashouts && dedupedCashouts.length > 0 && (
             <div className="border border-zinc-900 divide-y divide-zinc-900">
-              {cashouts.map((c) => (
+              {dedupedCashouts.map((c) => (
                 <a
                   key={c._id}
                   href={suiscanTx(c.txDigest)}
@@ -357,11 +390,17 @@ function ProfileHeader({
   );
 }
 
-function PassRow({ row }: { row: PassRow }) {
+function PassRow({ row, cashed }: { row: PassRow; cashed: boolean }) {
   const matchday = useQuery(
     api.matchdays.getByPool,
     convexConfigured ? { poolObjectId: row.poolObjectId } : "skip",
-  ) as MatchdayLite | null | undefined;
+  ) as (MatchdayLite & { rosterBlobId?: string }) | null | undefined;
+  const { data: roster } = useRoster(matchday?.rosterBlobId ?? "");
+  const playerName = roster?.players.find((p) => p.id === row.playerId)?.name;
+
+  // A cashout burns the pass, so a recorded cashout is the source of truth even
+  // if the projected pass status briefly drifted.
+  const status: "alive" | "out" | "cashed" = cashed ? "cashed" : row.status;
 
   return (
     <li className="px-5 py-4 grid grid-cols-12 items-center gap-3">
@@ -373,8 +412,11 @@ function PassRow({ row }: { row: PassRow }) {
           {row.passId.slice(0, 14)}…
         </a>
       </div>
-      <div className="col-span-4 md:col-span-3 text-utility text-zinc-500 truncate">
-        Player #{row.playerId}
+      <div className="col-span-4 md:col-span-3 min-w-0">
+        <div className="text-base text-zinc-200 truncate">
+          {playerName ?? `Player #${row.playerId}`}
+        </div>
+        <div className="text-utility text-zinc-600">#{row.playerId}</div>
       </div>
       <div className="col-span-4 md:col-span-3 min-w-0">
         {matchday ? (
@@ -389,7 +431,7 @@ function PassRow({ row }: { row: PassRow }) {
         )}
       </div>
       <div className="col-span-12 md:col-span-2 md:text-right">
-        <StatusPill status={row.status} />
+        <StatusPill status={status} />
       </div>
       <div className="col-span-12 md:col-span-1 md:text-right">
         <a

@@ -61,12 +61,13 @@ import {
   payoutIfSurvives,
   payoutActual,
   payoutBestCase,
+  grossPotFromNet,
+  settledSurvivorPasses,
   PLATFORM_FEE_BPS,
 } from "@/lib/odds";
 import type { Player } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
-import { GraphView } from "./graph-view";
 import { CompareModal } from "./compare-modal";
 import { MatchBroadcast } from "@/components/live/match-broadcast";
 
@@ -116,7 +117,6 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [view, setView] = useState<"list" | "graph">("list");
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
 
@@ -226,16 +226,29 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
     );
   }
 
+  // Post-settle, group survivors ahead of the eliminated so the outcome reads
+  // top-to-bottom; within each group keep the pick-popularity ordering.
+  const settledForSort = pool.phase >= 2;
+  const eliminatedSet = new Set(pool.eliminated_players);
   const ranked: RankedPlayer[] = roster.players
     .map((player) => ({ player, count: counts[player.id] ?? 0 }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => {
+      if (settledForSort) {
+        const aOut = eliminatedSet.has(a.player.id) ? 1 : 0;
+        const bOut = eliminatedSet.has(b.player.id) ? 1 : 0;
+        if (aOut !== bOut) return aOut - bOut;
+      }
+      return b.count - a.count;
+    });
 
   const myPasses = (passes ?? []).filter(
     (p) => p.pool_id === poolId,
   );
   const myPlayerIds = new Set(myPasses.map((p) => p.player_id));
 
-  const maxCount = Math.max(1, ranked[0]?.count ?? 0);
+  // Bar scale is the global max pick count — not ranked[0], which post-settle
+  // is the top *survivor*, not necessarily the most-picked player.
+  const maxCount = Math.max(1, ...ranked.map((r) => r.count));
   const totalPicks = Math.max(1, pool.total_passes);
 
   // Matchday results keyed by player_id. When the sim is active, overlay a
@@ -280,11 +293,23 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
 
   const estSurvivors = estimateSurvivorCount(roster.players, counts);
   const isSettled = pool.phase >= 2;
+  // Post-settle aggregates must come from FROZEN snapshots, not the live chain
+  // fields the contract drains on every cashout (alive_count / pot). Survivor
+  // count derives from mint counts + eliminations (both fixed at lock); the
+  // prize pool reconstructs the gross-at-settle from the post-fee snapshot.
+  const survivorPasses = settledSurvivorPasses(
+    pool.total_passes,
+    counts,
+    pool.eliminated_players,
+  );
+  const displayPotMist = isSettled
+    ? grossPotFromNet(pool.net_pot_mist)
+    : pool.pot_mist;
   // Post-settle: header shows the AVERAGE net-pot share (the real per-pass
   // payout is weighted per pick — computed per row below). Pre-settle: keep the
   // estimate for "vibes" but every per-row number derives from `counts`.
   const payoutPerSurvivor = isSettled
-    ? payoutActual(pool.net_pot_mist, pool.alive_count)
+    ? payoutActual(pool.net_pot_mist, survivorPasses)
     : payoutIfSurvives(pool.pot_mist, estSurvivors);
 
   return (
@@ -304,9 +329,9 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
       {/* Settled banner — shouts the match outcome the moment phase flips. */}
       {isSettled && !simActive && (
         <SettledBanner
-          aliveCount={pool.alive_count}
+          survivorPasses={survivorPasses}
           totalPasses={pool.total_passes}
-          potMist={pool.pot_mist}
+          netPotMist={pool.net_pot_mist}
         />
       )}
 
@@ -344,18 +369,16 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
         <div className="mx-auto max-w-[90rem] px-6 lg:px-12 pt-10 md:pt-12 pb-6 grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8">
           <BigNumber
             label="Prize Pool"
-            value={formatSui(pool.pot_mist)}
+            value={formatSui(displayPotMist)}
             unit="SUI"
             accent
           />
           <BigNumber
-            label={pool.phase >= 2 ? "Survivors" : "Total Picks"}
+            label={isSettled ? "Survivors" : "Total Picks"}
             value={
-              pool.phase >= 2
-                ? `${pool.alive_count}`
-                : String(pool.total_passes)
+              isSettled ? `${survivorPasses}` : String(pool.total_passes)
             }
-            unit={pool.phase >= 2 ? `/ ${pool.total_passes}` : undefined}
+            unit={isSettled ? `/ ${pool.total_passes}` : undefined}
           />
           <BigNumber
             label={isSettled ? "Avg / survivor" : "Payout / survivor"}
@@ -391,7 +414,6 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
       {/* Toolbar */}
       <section className="border-b border-zinc-900">
         <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-4 flex flex-wrap items-center gap-3">
-          <ViewToggle value={view} onChange={setView} />
           <SearchBar value={query} onChange={setQuery} />
           <div className="ml-auto">
             <Button
@@ -408,27 +430,16 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
       {/* Main content */}
       <section className="border-b border-zinc-900">
         <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-10 md:py-12">
-          {view === "list" ? (
-            <ListView
-              ranked={filteredRanked}
-              maxCount={maxCount}
-              totalPicks={totalPicks}
-              pool={pool}
-              myPlayerIds={myPlayerIds}
-              passes={myPasses}
-              roster={roster.players}
-              matchdayResults={matchdayResults}
-            />
-          ) : (
-            <GraphView
-              players={roster.players}
-              counts={counts}
-              pool={pool}
-              myPlayerIds={myPlayerIds}
-              query={query}
-              matchdayResults={matchdayResults}
-            />
-          )}
+          <ListView
+            ranked={filteredRanked}
+            maxCount={maxCount}
+            totalPicks={totalPicks}
+            pool={pool}
+            myPlayerIds={myPlayerIds}
+            passes={myPasses}
+            roster={roster.players}
+            matchdayResults={matchdayResults}
+          />
         </div>
       </section>
 
@@ -597,49 +608,6 @@ function WithdrawPanel({
         </div>
       </div>
     </section>
-  );
-}
-
-function ViewToggle({
-  value,
-  onChange,
-}: {
-  value: "list" | "graph";
-  onChange: (v: "list" | "graph") => void;
-}) {
-  return (
-    <div className="inline-flex border border-zinc-800 rounded-full p-0.5 bg-ink-surface">
-      <ToggleBtn active={value === "list"} onClick={() => onChange("list")}>
-        List
-      </ToggleBtn>
-      <ToggleBtn active={value === "graph"} onClick={() => onChange("graph")}>
-        Graph
-      </ToggleBtn>
-    </div>
-  );
-}
-
-function ToggleBtn({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "px-4 py-1.5 text-utility rounded-full transition-colors",
-        active
-          ? "bg-hazard text-ink"
-          : "text-zinc-400 hover:text-zinc-100",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1066,15 +1034,15 @@ function Empty({
  * leaderboard to figure out who survived.
  */
 function SettledBanner({
-  aliveCount,
+  survivorPasses,
   totalPasses,
-  potMist,
+  netPotMist,
 }: {
-  aliveCount: number;
+  survivorPasses: number;
   totalPasses: number;
-  potMist: bigint;
+  netPotMist: bigint;
 }) {
-  const perSurvivor = payoutActual(potMist, aliveCount);
+  const perSurvivor = payoutActual(netPotMist, survivorPasses);
   return (
     <div className="sticky top-0 z-30 border-b border-emerald-500/40 bg-ink/85 backdrop-blur">
       <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-3 flex items-center gap-4 flex-wrap">
@@ -1083,7 +1051,7 @@ function SettledBanner({
           SETTLED · matchday complete
         </span>
         <span className="text-utility text-zinc-300 tabular font-mono">
-          {aliveCount} / {totalPasses} survivors
+          {survivorPasses} / {totalPasses} survivors
         </span>
         <span className="ml-auto text-utility text-zinc-300 tabular font-mono">
           {formatSui(perSurvivor)} SUI / survivor

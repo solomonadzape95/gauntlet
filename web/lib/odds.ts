@@ -61,6 +61,37 @@ export function platformFeeMist(potMist: bigint): bigint {
 }
 
 /**
+ * Reconstruct the GROSS pot at settle from the post-fee snapshot
+ * (`net_pot_mist`). The on-chain `cashout` drains the live pot as winners
+ * claim, so reading `pot_mist` post-settle makes the "Prize Pool" appear to
+ * shrink. `net_pot_mist` is frozen at settle; inverting the fee gives a stable
+ * gross figure that matches the pre-settle pot semantics (modulo integer dust).
+ */
+export function grossPotFromNet(netPotMist: bigint): bigint {
+  if (netPotMist <= 0n) return 0n;
+  return (netPotMist * BigInt(BPS_DENOM)) / BigInt(BPS_DENOM - PLATFORM_FEE_BPS);
+}
+
+/**
+ * Stable count of surviving PASSES, independent of cashout order. The on-chain
+ * `alive_count` decrements on every cashout, so it can't be shown as the
+ * settled "Survivors" figure. Mint counts and eliminations are both frozen
+ * once the pool locks, so `total - Σ counts[eliminated]` never moves.
+ */
+export function settledSurvivorPasses(
+  totalPasses: number,
+  counts: Record<number, number>,
+  eliminatedPlayerIds: number[],
+): number {
+  const out = new Set(eliminatedPlayerIds);
+  let eliminatedPasses = 0;
+  for (const [pid, c] of Object.entries(counts)) {
+    if (out.has(Number(pid))) eliminatedPasses += c;
+  }
+  return Math.max(0, totalPasses - eliminatedPasses);
+}
+
+/**
  * Weighted per-pass payout: netPot * weight / survivingWeight. Mirrors the
  * on-chain `cashout` math so the UI shows what actually lands in the wallet.
  */

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { shortAddress, formatSui, suiscanObject } from "@/lib/sui";
 import { convexConfigured } from "@/lib/convex";
 import { usePoolState } from "@/lib/hooks/use-pool-state";
+import { grossPotFromNet } from "@/lib/odds";
 
 interface MdRow {
   _id: string;
@@ -55,14 +56,14 @@ export default function AdminPoolsListPage() {
       <CornerFrame className="border-b border-zinc-900">
         <section className="mx-auto max-w-[110rem] px-6 lg:px-10 py-10 md:py-12">
           <div className="text-utility text-zinc-500 mb-3">
-            Pools · on-chain lifecycle
+            Live · on-chain pools
           </div>
           <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight max-w-3xl">
-            All on-chain pools
+            Live pools
           </h1>
           <p className="mt-3 text-base text-zinc-400 max-w-2xl">
-            Every matchday that&apos;s minted its Sui Pool. Click one to lock,
-            simulate, settle, or close it. Need a fresh pool?{" "}
+            Every matchday that&apos;s minted its Sui Pool. Click one to watch the
+            broadcast and lock, simulate, settle, or close it. Need a fresh pool?{" "}
             <Link
               href="/admin/tournaments"
               className="text-hazard hover:underline"
@@ -221,7 +222,12 @@ function PoolRow({ md }: { md: MdRow }) {
           <>
             <span>{pool.total_passes} mints</span>
             <span className="font-mono">
-              {formatSui(pool.pot_mist)} SUI
+              {formatSui(
+                pool.phase >= 2
+                  ? grossPotFromNet(pool.net_pot_mist)
+                  : pool.pot_mist,
+              )}{" "}
+              SUI
             </span>
           </>
         ) : (

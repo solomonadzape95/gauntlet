@@ -17,6 +17,15 @@ export const listForTournament = query({
   },
 });
 
+/** Every matchday across all tournaments. Used by admin views that need a
+ *  poolObjectId → tournament/matchday lookup map (e.g. the cashouts ledger). */
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.db.query("matchdays").collect();
+  },
+});
+
 export const getByMd = query({
   args: { tournamentSlug: v.string(), mdSlug: v.string() },
   handler: async (ctx, { tournamentSlug, mdSlug }) => {

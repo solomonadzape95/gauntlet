@@ -27,6 +27,22 @@ export const listByPool = query({
   },
 });
 
+/**
+ * Single pass record by on-chain pass id. The on-chain Pass NFT is BURNED on
+ * cashout (`object::delete`), so chain reads 404 a cashed pass — this Convex
+ * row is the surviving record. Used by the pass page to render a "Cashed out"
+ * receipt instead of "not found".
+ */
+export const getByPassId = query({
+  args: { passId: v.string() },
+  handler: async (ctx, { passId }) => {
+    return ctx.db
+      .query("passes")
+      .withIndex("by_pass_id", (q) => q.eq("passId", passId))
+      .unique();
+  },
+});
+
 export const upsert = mutation({
   args: {
     passId: v.string(),
@@ -43,9 +59,12 @@ export const upsert = mutation({
       .withIndex("by_pass_id", (q) => q.eq("passId", args.passId))
       .unique();
     if (existing) {
+      // Never regress a terminal status. A re-projected PassMinted event must
+      // not flip an already cashed/eliminated pass back to "alive".
+      const terminal = existing.status === "cashed" || existing.status === "out";
       await ctx.db.patch(existing._id, {
         ownerAddress: args.ownerAddress,
-        status: args.status,
+        status: terminal ? existing.status : args.status,
       });
       return existing._id;
     }

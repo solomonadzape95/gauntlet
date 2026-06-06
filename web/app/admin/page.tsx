@@ -7,7 +7,6 @@ import {
   Trophy,
   Layers,
   FileJson,
-  Flag,
   Users2,
   Coins,
   ShieldCheck,
@@ -98,8 +97,8 @@ export default function AdminDashboard() {
             />
             <NavCard
               href="/admin/pools"
-              title="On-chain pools"
-              body="Lifecycle controls — lock, settle, close. Player breakdown, live events. Wired to the current Pool object."
+              title="Live"
+              body="Watch + run every pool — lock, settle, close, player breakdown, live events. Lifecycle controls per pool."
               icon={<Layers className="size-5" />}
             />
             <NavCard
@@ -107,12 +106,6 @@ export default function AdminDashboard() {
               title="Rosters"
               body="Upload player pools + matchday rosters to Walrus. Index every blob so create-pool can pick from a dropdown."
               icon={<FileJson className="size-5" />}
-            />
-            <NavCard
-              href="/admin/settlements"
-              title="Settlements"
-              body="Per-pool roster grid with click-to-eliminate UI. Push results to Walrus and call settle_pool."
-              icon={<Flag className="size-5" />}
             />
             <NavCard
               href="/admin/users"

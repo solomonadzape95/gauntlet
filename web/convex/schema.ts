@@ -108,6 +108,7 @@ export default defineSchema({
   })
     .index("by_pool", ["poolObjectId"])
     .index("by_owner", ["ownerAddress"])
+    .index("by_pass_id", ["passId"])
     .index("by_time", ["timestampMs"]),
 
   // Admin role table. Seeded with NEXT_PUBLIC_ADMIN_ADDRESS; expandable from UI.

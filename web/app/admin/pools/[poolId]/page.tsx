@@ -26,6 +26,7 @@ import { useMintCounts, mintCountsKey } from "@/lib/hooks/use-mint-counts";
 import { useRoster } from "@/lib/hooks/use-roster";
 import { fetchMatchday } from "@/lib/walrus";
 import { convexConfigured } from "@/lib/convex";
+import { grossPotFromNet, settledSurvivorPasses } from "@/lib/odds";
 
 import { cn } from "@/lib/cn";
 
@@ -169,22 +170,43 @@ export default function AdminPoolDetailPage({
         </section>
       </CornerFrame>
 
-      {/* Stats dashboard — 3 × 2 tile grid */}
+      {/* Stats dashboard — 3 × 2 tile grid. Post-settle figures come from
+          FROZEN snapshots (mint counts + net_pot), never the live alive_count /
+          pot that the contract drains as winners cash out. */}
       <section className="border-b border-zinc-900">
         <div className="mx-auto max-w-5xl px-6 lg:px-10 py-10 md:py-12">
           <div className="grid grid-cols-2 md:grid-cols-5">
             <StatTile
               label="Pot"
-              value={formatSui(pool.pot_mist)}
+              value={formatSui(
+                pool.phase >= 2 ? grossPotFromNet(pool.net_pot_mist) : pool.pot_mist,
+              )}
               unit="SUI"
               accent
             />
             <StatTile label="Mints" value={String(pool.total_passes)} />
-            <StatTile label="Alive" value={String(pool.alive_count)} />
-            <StatTile
-              label="Out"
-              value={String(Math.max(0, pool.total_passes - pool.alive_count))}
-            />
+            {(() => {
+              const survivors =
+                pool.phase >= 2
+                  ? settledSurvivorPasses(
+                      pool.total_passes,
+                      counts,
+                      pool.eliminated_players,
+                    )
+                  : pool.alive_count;
+              return (
+                <>
+                  <StatTile
+                    label={pool.phase >= 2 ? "Survivors" : "Alive"}
+                    value={String(survivors)}
+                  />
+                  <StatTile
+                    label="Out"
+                    value={String(Math.max(0, pool.total_passes - survivors))}
+                  />
+                </>
+              );
+            })()}
             <StatTile
               label="Entry"
               value={formatSui(pool.entry_fee_mist)}

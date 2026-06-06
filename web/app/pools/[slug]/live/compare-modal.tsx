@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Search } from "lucide-react";
 import type { Player } from "@/lib/types";
 import type { PoolState } from "@/lib/hooks/use-pool-state";
-import { Flag } from "@/components/icons/flag";
+import { CountryFlag } from "@/components/icons/country-flag";
 import { Crest } from "@/components/icons/crest";
 import { targetIcons } from "@/lib/target-icons";
 import { formatSui } from "@/lib/sui";
@@ -149,11 +149,13 @@ function PlayerSlot({
       <div>
         <div className="text-utility text-zinc-500 mb-2">{label}</div>
         <div className="border border-zinc-800 bg-ink px-4 py-3 flex items-center gap-3">
-          <Flag country={value.team} width={22} />
+          <CountryFlag country={value.country ?? value.team} width={22} />
           <Crest club={value.club} size={20} />
           <div className="flex-1 min-w-0">
             <div className="text-zinc-100 truncate text-base">{value.name}</div>
-            <div className="text-utility text-zinc-500 mt-0.5">{value.team} · {value.position}</div>
+            <div className="text-utility text-zinc-500 mt-0.5">
+              #{value.id} · {value.team} · {value.position}
+            </div>
           </div>
           <button
             onClick={() => {
@@ -214,9 +216,12 @@ function PlayerSlot({
                 value?.id === p.id && "bg-zinc-900",
               )}
             >
-              <Flag country={p.team} width={18} />
+              <CountryFlag country={p.country ?? p.team} width={18} />
               <Crest club={p.club} size={16} />
-              <span className="flex-1 truncate text-zinc-100">{p.name}</span>
+              <span className="flex-1 truncate text-zinc-100">
+                {p.name}{" "}
+                <span className="text-zinc-600 font-mono text-xs">#{p.id}</span>
+              </span>
               <span className="text-utility text-zinc-500">{p.position}</span>
             </button>
           ))
@@ -255,7 +260,7 @@ function ComparisonCard({
   return (
     <div className="border border-zinc-900 p-5">
       <div className="flex items-center gap-2 mb-3">
-        <Flag country={player.team} width={22} />
+        <CountryFlag country={player.country ?? player.team} width={22} />
         <Crest club={player.club} size={20} />
         <span className="text-utility text-zinc-500">{player.position}</span>
       </div>
@@ -263,6 +268,9 @@ function ComparisonCard({
       <h3 className="font-serif text-2xl md:text-3xl font-semibold tracking-tight">
         {player.name}
       </h3>
+      <div className="mt-1 text-utility text-zinc-600 font-mono">
+        #{player.id} · {player.team}
+      </div>
 
       <div className="mt-5 pt-4 border-t border-zinc-900 space-y-3">
         <Row label="Target">

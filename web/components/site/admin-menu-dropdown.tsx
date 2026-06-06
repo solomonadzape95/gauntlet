@@ -14,10 +14,8 @@ interface MenuItem {
 export const ADMIN_NAV: MenuItem[] = [
   { href: "/admin", label: "Dashboard", description: "Overview, counters, recent activity." },
   { href: "/admin/tournaments", label: "Tournaments", description: "Top-level containers and cover art." },
-  { href: "/admin/pools", label: "Pools", description: "On-chain pool lifecycle: lock, settle, close." },
+  { href: "/admin/pools", label: "Live", description: "Watch + run every pool: lock, settle, close, cash out." },
   { href: "/admin/rosters", label: "Rosters", description: "Walrus uploads and roster index." },
-  { href: "/admin/settlements", label: "Settlements", description: "Per-pool elimination workspace." },
-  { href: "/admin/live", label: "Live", description: "Every live pool in the system." },
   { href: "/admin/users", label: "Users", description: "Wallet directory with pass counts." },
   { href: "/admin/cashouts", label: "Cashouts", description: "Cashout receipts ledger." },
   { href: "/admin/admins", label: "Admins", description: "Add / remove admin addresses." },

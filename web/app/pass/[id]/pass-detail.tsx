@@ -28,13 +28,15 @@ import {
   poolStateKey,
   type PoolState,
 } from "@/lib/hooks/use-pool-state";
-import { mintCountsKey } from "@/lib/hooks/use-mint-counts";
+import { useMintCounts, mintCountsKey } from "@/lib/hooks/use-mint-counts";
 import { useRoster } from "@/lib/hooks/use-roster";
 import { convexConfigured } from "@/lib/convex";
 import { usePass, PASS_KEY, type PassObject } from "@/lib/hooks/use-pass";
 import {
   survivalWeight,
   weightedPayout,
+  grossPotFromNet,
+  settledSurvivorPasses,
   PLATFORM_FEE_BPS,
 } from "@/lib/odds";
 
@@ -53,24 +55,65 @@ import { targetIcons } from "@/lib/target-icons";
 import { assertTxSuccess, describeTxError, isUserRejection } from "@/lib/tx-errors";
 import { cn } from "@/lib/cn";
 
-type PassStatus = "alive" | "eliminated" | "waiting" | "closed";
+type PassStatus = "alive" | "eliminated" | "waiting" | "closed" | "cashed";
+
+interface ConvexPassRow {
+  passId: string;
+  ownerAddress: string;
+  poolObjectId: string;
+  playerId: number;
+  status: "alive" | "out" | "cashed";
+  mintedAtMs: number;
+}
 
 export function PassDetail({ passId }: { passId: string }) {
   const account = useCurrentAccount();
-  const { data: pass, isLoading: passLoading } = usePass(passId);
+  const { data: chainPass, isLoading: passLoading } = usePass(passId);
+
+  // The on-chain Pass NFT is BURNED on cashout (`object::delete`), so a cashed
+  // pass 404s from chain reads. Convex keeps the record — fall back to it so a
+  // cashed pass renders a receipt instead of "not found".
+  const convexPass = useConvexQuery(
+    api.passes.getByPassId,
+    convexConfigured ? { passId } : "skip",
+  ) as ConvexPassRow | null | undefined;
+  const cashoutRow = useConvexQuery(
+    api.cashouts.getByPassId,
+    convexConfigured ? { passId } : "skip",
+  ) as { amountMist: string; txDigest: string; timestampMs: number } | null | undefined;
+  const convexPending = convexConfigured && convexPass === undefined;
+
+  // Effective pass: prefer the live chain object; otherwise reconstruct from
+  // the Convex record (a burned/cashed pass).
+  const pass: PassObject | null =
+    chainPass ??
+    (convexPass
+      ? {
+          pool_id: convexPass.poolObjectId,
+          player_id: convexPass.playerId,
+          minted_at_ms: BigInt(convexPass.mintedAtMs ?? 0),
+          owner: convexPass.ownerAddress,
+        }
+      : null);
+  // Chain object gone but a record exists ⇒ it was cashed out (and burned).
+  const isCashed = !chainPass && !!convexPass;
+
   // Pool state must come from the pass's OWN pool_id (set when it was
   // minted) — NOT the env-default singleton. After a fresh pool spawn,
   // env still points at the old pool, but this pass belongs to whichever
   // pool minted it.
   const poolIdForPass = pass?.pool_id ?? "0x0";
   const { data: pool, isLoading: poolLoading } = usePoolState(poolIdForPass);
+  const counts = useMintCounts(poolIdForPass);
 
   // The roster must come from the matchday tied to *this pass's pool*, not
   // env-default. Look up the matchday row in Convex, fall back to env when
   // the pool isn't recorded (legacy single-pool deployments).
   const matchdayRow = useConvexQuery(
     api.matchdays.getByPool,
-    convexConfigured && pass?.pool_id ? { poolObjectId: pass.pool_id } : "skip",
+    convexConfigured && poolIdForPass !== "0x0"
+      ? { poolObjectId: poolIdForPass }
+      : "skip",
   ) as { rosterBlobId?: string } | null | undefined;
   const rosterBlobId = matchdayRow?.rosterBlobId ?? ROSTER_BLOB_ID;
   const { data: roster, isLoading: rosterLoading } = useRoster(rosterBlobId);
@@ -78,9 +121,9 @@ export function PassDetail({ passId }: { passId: string }) {
   // pending too — we don't want to flash "Unknown player" using a stale
   // env-default roster while the real one is on its way.
   const matchdayPending =
-    convexConfigured && !!pass?.pool_id && matchdayRow === undefined;
+    convexConfigured && poolIdForPass !== "0x0" && matchdayRow === undefined;
 
-  if (passLoading || poolLoading || rosterLoading || matchdayPending) {
+  if (passLoading || convexPending || poolLoading || rosterLoading || matchdayPending) {
     return (
       <main className="min-h-screen">
         <TopBar />
@@ -99,7 +142,7 @@ export function PassDetail({ passId }: { passId: string }) {
         <div className="mx-auto max-w-2xl px-6 py-24 text-center">
           <h1 className="text-display-md">Pass not found</h1>
           <p className="mt-4 text-zinc-400">
-            This Survival Pass may have been cashed out (and burned), or the ID is wrong.
+            No on-chain pass and no record for this ID. The ID may be wrong.
           </p>
           <p className="mt-3 font-mono text-xs text-zinc-600">
             {shortAddress(passId, 8, 8)}
@@ -150,8 +193,9 @@ export function PassDetail({ passId }: { passId: string }) {
 
   const isOwner = account?.address === pass.owner;
   const isEliminated = pool.eliminated_players.includes(pass.player_id);
-  const status: PassStatus =
-    pool.phase === 0 || pool.phase === 1
+  const status: PassStatus = isCashed
+    ? "cashed"
+    : pool.phase === 0 || pool.phase === 1
       ? "waiting"
       : pool.phase === 2 && isEliminated
         ? "eliminated"
@@ -273,6 +317,8 @@ export function PassDetail({ passId }: { passId: string }) {
                 passId={passId}
                 player={player}
                 isOwner={isOwner}
+                counts={counts}
+                cashout={cashoutRow ?? null}
               />
             </div>
           </div>
@@ -288,6 +334,7 @@ function statusLabelText(status: PassStatus): string {
     eliminated: "Out",
     waiting: "Kickoff pending",
     closed: "Pool closed",
+    cashed: "Cashed out",
   }[status];
 }
 
@@ -297,6 +344,7 @@ function statusToneText(status: PassStatus): string {
     eliminated: "text-zinc-500",
     waiting: "text-zinc-300",
     closed: "text-zinc-600",
+    cashed: "text-emerald-400",
   }[status];
 }
 
@@ -307,6 +355,8 @@ function StatusPanel({
   passId,
   player,
   isOwner,
+  counts,
+  cashout,
 }: {
   status: PassStatus;
   pool: PoolState;
@@ -314,6 +364,8 @@ function StatusPanel({
   passId: string;
   player: Player;
   isOwner: boolean;
+  counts: Record<number, number>;
+  cashout: { amountMist: string; txDigest: string; timestampMs: number } | null;
 }) {
   const poolIdForPass = pass.pool_id;
   // Weighted share of the post-fee pot — mirrors the on-chain cashout math.
@@ -323,6 +375,61 @@ function StatusPanel({
       pool.net_pot_mist,
       survivalWeight(player.difficulty),
       pool.surviving_weight,
+    );
+  }
+
+  // Frozen post-settle aggregates (never the draining live alive_count / pot).
+  const survivorPasses = settledSurvivorPasses(
+    pool.total_passes,
+    counts,
+    pool.eliminated_players,
+  );
+  const settledPotMist = grossPotFromNet(pool.net_pot_mist);
+
+  if (status === "cashed") {
+    return (
+      <Card variant="hazard">
+        <div className="text-utility text-emerald-400 mb-2">✓ Cashed out</div>
+        <h2 className="text-2xl md:text-3xl font-semibold">
+          {cashout
+            ? `${formatSui(BigInt(cashout.amountMist))} SUI claimed`
+            : `${player.name} survived`}
+        </h2>
+        <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+          This pass was cashed out and burned on-chain. The NFT no longer
+          exists, but the payout is recorded permanently below.
+        </p>
+        {cashout && (
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            <Stat
+              label="Payout"
+              value={formatSui(BigInt(cashout.amountMist))}
+              unit="SUI"
+              accent
+            />
+            <Stat
+              label="When"
+              value={new Date(cashout.timestampMs).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
+            />
+          </div>
+        )}
+        {cashout && (
+          <div className="mt-6">
+            <a
+              href={suiscanTx(cashout.txDigest)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="hazard" size="lg" bullet>
+                View transaction <ArrowUpRight className="size-4" />
+              </Button>
+            </a>
+          </div>
+        )}
+      </Card>
     );
   }
 
@@ -356,8 +463,8 @@ function StatusPanel({
           for the survivors.
         </p>
         <div className="mt-6 grid grid-cols-2 gap-4">
-          <Stat label="Pot" value={formatSui(pool.pot_mist)} unit="SUI" />
-          <Stat label="Survivors" value={String(pool.alive_count)} />
+          <Stat label="Pot" value={formatSui(settledPotMist)} unit="SUI" />
+          <Stat label="Survivors" value={String(survivorPasses)} />
         </div>
       </Card>
     );
@@ -372,6 +479,8 @@ function StatusPanel({
         pool={pool}
         estimatedPayout={estimatedPayout}
         isOwner={isOwner}
+        survivorPasses={survivorPasses}
+        settledPotMist={settledPotMist}
       />
     );
   }
@@ -391,6 +500,8 @@ function CashoutPanel({
   pool,
   estimatedPayout,
   isOwner,
+  survivorPasses,
+  settledPotMist,
 }: {
   passId: string;
   poolId: string;
@@ -398,6 +509,8 @@ function CashoutPanel({
   pool: PoolState;
   estimatedPayout: bigint;
   isOwner: boolean;
+  survivorPasses: number;
+  settledPotMist: bigint;
 }) {
   const client = useSuiClient();
   const qc = useQueryClient();
@@ -495,8 +608,8 @@ function CashoutPanel({
           unit="SUI"
           accent
         />
-        <Stat label="Survivors" value={String(pool.alive_count)} />
-        <Stat label="Pot" value={formatSui(pool.pot_mist)} unit="SUI" />
+        <Stat label="Survivors" value={String(survivorPasses)} />
+        <Stat label="Pot" value={formatSui(settledPotMist)} unit="SUI" />
       </div>
 
       <p className="mt-4 text-xs text-zinc-500 leading-relaxed">

@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useQuery as useConvexQuery } from "convex/react";
 
+import { api } from "@/convex/_generated/api";
+import { convexConfigured } from "@/lib/convex";
 import { TopBar } from "@/components/site/top-bar";
 import { CornerFrame } from "@/components/ui/corner-frame";
 import { Button } from "@/components/ui/button";
@@ -20,8 +23,17 @@ import {
   formatSui,
   suiscanObject,
 } from "@/lib/sui";
+import { survivalWeight, weightedPayout } from "@/lib/odds";
 import type { Player } from "@/lib/types";
 import { cn } from "@/lib/cn";
+
+interface ConvexPassRow {
+  passId: string;
+  poolObjectId: string;
+  playerId: number;
+  status: "alive" | "out" | "cashed";
+  mintedAtMs: number;
+}
 
 export default function MePage() {
   // All hooks must run in the same order on every render — keep them above
@@ -32,6 +44,14 @@ export default function MePage() {
   const { data: roster, isLoading: rosterLoading } = useRoster();
   const { data: pool } = usePoolState();
   const [query, setQuery] = useState("");
+
+  // Cashed passes are BURNED on-chain, so `useMyPasses` (chain read) can't see
+  // them. Convex keeps the record — pull it so cashed passes still show as
+  // history instead of silently vanishing.
+  const convexPasses = useConvexQuery(
+    api.passes.listByOwner,
+    convexConfigured && account ? { ownerAddress: account.address } : "skip",
+  ) as ConvexPassRow[] | undefined;
 
   const playerMap = useMemo(
     () => new Map<number, Player>((roster?.players ?? []).map((p) => [p.id, p])),
@@ -85,8 +105,19 @@ export default function MePage() {
   const archived = (passes ?? []).filter(
     (p) => p.pool_id !== POOL_OBJECT_ID && matches(p.player_id),
   );
-  const hasAnyPass = (passes ?? []).length > 0;
-  const hasFilteredResults = active.length + archived.length > 0;
+  const cashed: MyPass[] = (convexPasses ?? [])
+    .filter((p) => p.status === "cashed")
+    .map((p) => ({
+      id: p.passId,
+      pool_id: p.poolObjectId,
+      player_id: p.playerId,
+      minted_at_ms: BigInt(p.mintedAtMs ?? 0),
+    }))
+    .filter((p) => matches(p.player_id));
+  const hasCashed = (convexPasses ?? []).some((p) => p.status === "cashed");
+  const hasAnyPass = (passes ?? []).length > 0 || hasCashed;
+  const hasFilteredResults =
+    active.length + archived.length + cashed.length > 0;
 
   return (
     <main className="min-h-screen">
@@ -164,7 +195,7 @@ export default function MePage() {
           )}
 
           {archived.length > 0 && (
-            <section>
+            <section className={cashed.length > 0 ? "border-b border-zinc-900" : ""}>
               <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-12">
                 <SectionHeading
                   label="Archive"
@@ -179,6 +210,34 @@ export default function MePage() {
                       player={playerMap.get(p.player_id)}
                       pool={null}
                       isCurrent={false}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {cashed.length > 0 && (
+            <section>
+              <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-12">
+                <SectionHeading
+                  label="Cashed out"
+                  count={cashed.length}
+                  note="Winnings claimed. The pass NFT was burned on-chain; this is the record."
+                />
+                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {cashed.map((p) => (
+                    <PassRowCard
+                      key={p.id}
+                      pass={p}
+                      player={playerMap.get(p.player_id)}
+                      pool={null}
+                      isCurrent={false}
+                      overrideStatus={{
+                        label: "Cashed out",
+                        tone: "text-emerald-400",
+                        accent: true,
+                      }}
                     />
                   ))}
                 </div>
@@ -220,13 +279,16 @@ function PassRowCard({
   player,
   pool,
   isCurrent,
+  overrideStatus,
 }: {
   pass: MyPass;
   player: Player | undefined;
   pool: PoolState | null;
   isCurrent: boolean;
+  overrideStatus?: { label: string; tone: string; accent: boolean };
 }) {
-  const { label, tone, accent } = statusFor(pass, pool, isCurrent);
+  const { label, tone, accent } =
+    overrideStatus ?? statusFor(pass, pool, isCurrent, player);
 
   return (
     <Link
@@ -277,6 +339,7 @@ function statusFor(
   pass: MyPass,
   pool: PoolState | null,
   isCurrent: boolean,
+  player: Player | undefined,
 ): { label: string; tone: string; accent: boolean } {
   if (!isCurrent) {
     return { label: "Archived pool", tone: "text-zinc-500", accent: false };
@@ -294,7 +357,15 @@ function statusFor(
     if (pool.eliminated_players.includes(pass.player_id)) {
       return { label: "Out", tone: "text-zinc-500", accent: false };
     }
-    const payout = pool.alive_count > 0 ? pool.pot_mist / BigInt(pool.alive_count) : 0n;
+    // Weighted share of the FROZEN post-fee pot — mirrors the on-chain cashout
+    // math and never drifts as other winners claim (unlike pot / alive_count).
+    const payout = player
+      ? weightedPayout(
+          pool.net_pot_mist,
+          survivalWeight(player.difficulty),
+          pool.surviving_weight,
+        )
+      : 0n;
     return {
       label: `Through · cash out ${formatSui(payout)} SUI`,
       tone: "text-hazard",

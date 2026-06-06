@@ -91,7 +91,7 @@ export const pollEvents = action({
         typeof data.pool_id === "string" ? data.pool_id : undefined;
       const ts = Number(ev.timestampMs ?? 0);
 
-      await ctx.runMutation(api.events.append, {
+      const appendResult = (await ctx.runMutation(api.events.append, {
         txDigest: ev.id.txDigest,
         eventSeq: ev.id.eventSeq,
         type: evType,
@@ -99,7 +99,12 @@ export const pollEvents = action({
         poolObjectId,
         payload: data,
         timestampMs: ts || Date.now(),
-      });
+      })) as { inserted?: boolean } | null;
+
+      // Only project derived tables (passes, cashouts, users) the FIRST time we
+      // see an event. Re-projecting on every 30s poll was inserting duplicate
+      // cashouts and re-flipping cashed/eliminated passes back to "alive".
+      if (!appendResult?.inserted) continue;
       inserted++;
 
       // Side effects per event type — derived tables (passes, cashouts, users).

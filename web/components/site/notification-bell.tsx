@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery as useConvexQuery } from "convex/react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Bell,
@@ -17,6 +18,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import { convexConfigured } from "@/lib/convex";
 import { formatSui, shortAddress, suiscanTx } from "@/lib/sui";
+import { useRoster } from "@/lib/hooks/use-roster";
 import { cn } from "@/lib/cn";
 
 const STORAGE_KEY = "gauntlet-notif-last-seen";
@@ -43,9 +45,13 @@ interface NotificationRow {
  * a watermark timestamp in localStorage so the badge clears.
  */
 export function NotificationBell() {
-  const events = useQuery(
-    api.events.recent,
-    convexConfigured ? { limit: 20 } : "skip",
+  const account = useCurrentAccount();
+  const address = account?.address ?? "";
+  // Scope notifications to the connected wallet — its own passes and the pools
+  // it holds a pass in. Without an address there's nothing personal to show.
+  const events = useConvexQuery(
+    api.events.forOwner,
+    convexConfigured && address ? { address, limit: 20 } : "skip",
   ) as NotificationRow[] | undefined;
 
   const [open, setOpen] = useState(false);
@@ -131,18 +137,23 @@ export function NotificationBell() {
               </button>
             </div>
             <div className="max-h-[28rem] overflow-y-auto">
-              {events === undefined && (
+              {!address && (
+                <div className="px-4 py-6 text-zinc-500 text-base">
+                  Connect your wallet to see activity on your passes.
+                </div>
+              )}
+              {address && events === undefined && (
                 <div className="px-4 py-6 text-zinc-500 text-base">
                   Loading…
                 </div>
               )}
-              {events && events.length === 0 && (
+              {address && events && events.length === 0 && (
                 <div className="px-4 py-6 text-zinc-500 text-base">
-                  No on-chain events yet. The Convex cron polls Sui RPC every
-                  30s; mint a pass to populate this.
+                  Nothing yet. Mint a pass and you&apos;ll see updates on your
+                  picks here.
                 </div>
               )}
-              {events && events.length > 0 && (
+              {address && events && events.length > 0 && (
                 <ul className="divide-y divide-zinc-900">
                   {events.map((ev) => (
                     <NotificationRow key={ev._id} ev={ev} />
@@ -157,8 +168,36 @@ export function NotificationBell() {
   );
 }
 
+/**
+ * Resolve a player's name from the pool's roster (pool → matchday row →
+ * Walrus roster blob). Returns null when there's no player on the event or the
+ * roster hasn't loaded — callers fall back to the numeric id.
+ */
+function usePlayerName(
+  poolObjectId: string | undefined,
+  playerId: number | null,
+): string | null {
+  const needsName = playerId != null && !!poolObjectId;
+  const matchday = useConvexQuery(
+    api.matchdays.getByPool,
+    convexConfigured && needsName ? { poolObjectId: poolObjectId! } : "skip",
+  ) as { rosterBlobId?: string } | null | undefined;
+  const { data: roster } = useRoster(
+    needsName ? matchday?.rosterBlobId ?? "" : "",
+  );
+  if (playerId == null) return null;
+  return roster?.players.find((p) => p.id === playerId)?.name ?? null;
+}
+
+function playerIdOf(ev: NotificationRow): number | null {
+  const raw = (ev.payload as { player_id?: unknown } | undefined)?.player_id;
+  return raw == null ? null : Number(raw);
+}
+
 function NotificationRow({ ev }: { ev: NotificationRow }) {
-  const meta = describe(ev);
+  const playerId = playerIdOf(ev);
+  const playerName = usePlayerName(ev.poolObjectId, playerId);
+  const meta = describe(ev, playerName);
   return (
     <li>
       <a
@@ -182,7 +221,10 @@ function NotificationRow({ ev }: { ev: NotificationRow }) {
   );
 }
 
-function describe(ev: NotificationRow): {
+function describe(
+  ev: NotificationRow,
+  playerName: string | null,
+): {
   title: string;
   detail: string;
   icon: React.ReactNode;
@@ -190,10 +232,11 @@ function describe(ev: NotificationRow): {
 } {
   const data = ev.payload ?? {};
   const playerId = Number((data as { player_id?: unknown }).player_id ?? 0);
+  const player = playerName ?? `player #${playerId}`;
   switch (ev.type) {
     case "PassMinted":
       return {
-        title: `Pass minted · player #${playerId}`,
+        title: `Pass minted · ${player}`,
         detail: "New Survival Pass",
         icon: <Coins className="size-4" />,
         tone: "text-emerald-300",
@@ -211,7 +254,7 @@ function describe(ev: NotificationRow): {
     }
     case "PassEliminated":
       return {
-        title: `Out · player #${playerId}`,
+        title: `Out · ${player}`,
         detail: "Pass burned",
         icon: <Skull className="size-4" />,
         tone: "text-zinc-500",
