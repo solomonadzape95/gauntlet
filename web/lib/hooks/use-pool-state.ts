@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery as useConvexQuery } from "convex/react";
+import { useEffect, useMemo } from "react";
+import { useQuery as useConvexQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { convexConfigured } from "@/lib/convex";
 import { POOL_OBJECT_ID } from "@/lib/sui";
+
+// Pools whose cache we've already asked to warm this session — so a genuine
+// cache miss triggers exactly one server refresh, not a loop.
+const warmed = new Set<string>();
 
 export function poolStateKey(poolId: string) {
   return ["pool-state", poolId] as const;
@@ -94,6 +98,17 @@ export function usePoolState(poolId: string = POOL_OBJECT_ID) {
     api.poolStates.forPool,
     convexConfigured && poolId !== "0x0" ? { poolObjectId: poolId } : "skip",
   ) as PoolStateRow | null | undefined;
+
+  // Cache miss (row === null) on a real pool → warm it from chain once, so a
+  // freshly-created pool shows immediately instead of after the 30s cron.
+  const refresh = useAction(api.sui_actions.refreshPool);
+  useEffect(() => {
+    if (!convexConfigured || poolId === "0x0") return;
+    if (row === null && !warmed.has(poolId)) {
+      warmed.add(poolId);
+      void refresh({ poolObjectId: poolId }).catch(() => warmed.delete(poolId));
+    }
+  }, [row, poolId, refresh]);
 
   const data = useMemo<PoolState | null | undefined>(() => {
     if (row === undefined) return undefined;
