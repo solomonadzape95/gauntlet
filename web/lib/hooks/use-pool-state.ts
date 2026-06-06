@@ -94,7 +94,7 @@ export function usePoolState(poolId: string = POOL_OBJECT_ID) {
           ((f.eliminated_players as Array<string | number>) ?? []).map(Number),
       };
     },
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchInterval: 20_000,
+    staleTime: 12_000,
   });
 }

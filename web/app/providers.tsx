@@ -25,7 +25,22 @@ const { networkConfig } = createNetworkConfig({
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [qc] = useState(() => new QueryClient());
+  // Default query behaviour tuned to spare the RPC rate limit: no refetch storm
+  // on window focus (every chain read fires at once otherwise), a short
+  // staleTime so duplicate reads dedupe, and capped retries.
+  const [qc] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+            staleTime: 10_000,
+            retry: 1,
+            retryDelay: (n) => Math.min(1000 * 2 ** n, 8000),
+          },
+        },
+      }),
+  );
   return (
     <ConvexProvider client={convex}>
       <QueryClientProvider client={qc}>

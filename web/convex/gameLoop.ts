@@ -81,8 +81,29 @@ interface ChainPool {
   total_passes: number;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retry a few times on rate-limit (429) with backoff — the shared gateway can
+ *  throttle when browser traffic spikes. */
+async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/429|too many requests/i.test(msg)) throw e;
+      await sleep(600 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 async function readPool(c: SuiClient, poolId: string): Promise<ChainPool | null> {
-  const obj = await c.getObject({ id: poolId, options: { showContent: true } });
+  const obj = await withRetry(() =>
+    c.getObject({ id: poolId, options: { showContent: true } }),
+  );
   const content = obj.data?.content;
   if (content?.dataType !== "moveObject") return null;
   const f = content.fields as Record<string, unknown>;
