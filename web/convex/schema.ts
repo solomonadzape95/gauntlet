@@ -119,6 +119,26 @@ export default defineSchema({
     addedAt: v.number(),
   }).index("by_address", ["address"]),
 
+  // Server-polled snapshot of each on-chain Pool, so browsers read pool state
+  // reactively from Convex instead of hammering Sui RPC from every tab (which
+  // tripped the gateway rate limit). Refreshed by the 30s cron + on demand.
+  poolStates: defineTable({
+    poolObjectId: v.string(),
+    admin: v.string(),
+    treasury: v.string(),
+    feeBps: v.number(),
+    entryFeeMist: v.string(),
+    potMist: v.string(),
+    netPotMist: v.string(),
+    totalPasses: v.number(),
+    aliveCount: v.number(),
+    survivingWeight: v.number(),
+    totalWeight: v.number(),
+    phase: v.number(),
+    eliminatedPlayers: v.array(v.number()),
+    updatedAt: v.number(),
+  }).index("by_pool", ["poolObjectId"]),
+
   // Autonomous game-loop state — one row per pool the engine manages. The
   // on-chain phase is the source of truth; this tracks the off-chain timers
   // (lock countdown, sim window) and bookkeeping the loop needs.

@@ -27,6 +27,21 @@ export const listByPool = query({
   },
 });
 
+/** Per-player mint counts for a pool, derived from the passes table — replaces
+ *  the per-browser queryEvents(PassMinted) RPC. Keyed by playerId (string). */
+export const countsByPool = query({
+  args: { poolObjectId: v.string() },
+  handler: async (ctx, { poolObjectId }) => {
+    const rows = await ctx.db
+      .query("passes")
+      .withIndex("by_pool", (q) => q.eq("poolObjectId", poolObjectId))
+      .collect();
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[r.playerId] = (counts[r.playerId] ?? 0) + 1;
+    return counts;
+  },
+});
+
 /**
  * Single pass record by on-chain pass id. The on-chain Pass NFT is BURNED on
  * cashout (`object::delete`), so chain reads 404 a cashed pass — this Convex

@@ -1,7 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useSuiClient } from "@mysten/dapp-kit";
+import { useMemo } from "react";
+import { useQuery as useConvexQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { convexConfigured } from "@/lib/convex";
 import { POOL_OBJECT_ID } from "@/lib/sui";
 
 export function poolStateKey(poolId: string) {
@@ -47,54 +49,57 @@ export const PHASE_DOT: Record<
   3: "closed",
 };
 
+interface PoolStateRow {
+  admin: string;
+  treasury: string;
+  feeBps: number;
+  entryFeeMist: string;
+  potMist: string;
+  netPotMist: string;
+  totalPasses: number;
+  aliveCount: number;
+  survivingWeight: number;
+  totalWeight: number;
+  phase: number;
+  eliminatedPlayers: number[];
+}
+
+function mapRow(row: PoolStateRow): PoolState {
+  return {
+    admin: row.admin,
+    treasury: row.treasury,
+    fee_bps: row.feeBps,
+    entry_fee_mist: BigInt(row.entryFeeMist),
+    pot_mist: BigInt(row.potMist),
+    net_pot_mist: BigInt(row.netPotMist),
+    surviving_weight: row.survivingWeight,
+    total_weight: row.totalWeight,
+    total_passes: row.totalPasses,
+    alive_count: row.aliveCount,
+    phase: row.phase,
+    roster_blob_id: [],
+    matchday_blob_id: [],
+    eliminated_players: row.eliminatedPlayers ?? [],
+  };
+}
+
 /**
- * Read a Pool shared object from chain. Defaults to the singleton pool from
- * env (POOL_OBJECT_ID). Pass `poolId` to scope to a specific Pool — used by
- * pool-scoped pages like /pools/[slug]/live.
+ * Pool state, read from the Convex `poolStates` cache (refreshed server-side
+ * every 30s + on demand) — NOT from Sui RPC. This keeps every browser tab off
+ * the rate-limited RPC gateway. Returns `{ data, isLoading }` so existing
+ * call sites are unchanged.
  */
 export function usePoolState(poolId: string = POOL_OBJECT_ID) {
-  const client = useSuiClient();
+  const row = useConvexQuery(
+    api.poolStates.forPool,
+    convexConfigured && poolId !== "0x0" ? { poolObjectId: poolId } : "skip",
+  ) as PoolStateRow | null | undefined;
 
-  return useQuery({
-    queryKey: poolStateKey(poolId),
-    enabled: poolId !== "0x0",
-    queryFn: async (): Promise<PoolState | null> => {
-      const obj = await client.getObject({
-        id: poolId,
-        options: { showContent: true },
-      });
+  const data = useMemo<PoolState | null | undefined>(() => {
+    if (row === undefined) return undefined;
+    if (row === null) return null;
+    return mapRow(row);
+  }, [row]);
 
-      const content = obj.data?.content;
-      if (content?.dataType !== "moveObject") return null;
-      const f = content.fields as Record<string, unknown>;
-
-      const pot = f.pot as { fields?: { value?: string } } | string | undefined;
-      const potValue =
-        typeof pot === "object" && pot?.fields?.value
-          ? pot.fields.value
-          : typeof pot === "string"
-            ? pot
-            : "0";
-
-      return {
-        admin: String(f.admin ?? ""),
-        treasury: String(f.treasury ?? ""),
-        fee_bps: Number(f.fee_bps ?? 0),
-        entry_fee_mist: BigInt(String(f.entry_fee_mist ?? "0")),
-        pot_mist: BigInt(potValue),
-        net_pot_mist: BigInt(String(f.net_pot_mist ?? "0")),
-        surviving_weight: Number(f.surviving_weight ?? 0),
-        total_weight: Number(f.total_weight ?? 0),
-        total_passes: Number(f.total_passes ?? 0),
-        alive_count: Number(f.alive_count ?? 0),
-        phase: Number(f.phase ?? 0),
-        roster_blob_id: (f.roster_blob_id as number[]) ?? [],
-        matchday_blob_id: (f.matchday_blob_id as number[]) ?? [],
-        eliminated_players:
-          ((f.eliminated_players as Array<string | number>) ?? []).map(Number),
-      };
-    },
-    refetchInterval: 20_000,
-    staleTime: 12_000,
-  });
+  return { data, isLoading: poolId !== "0x0" && row === undefined };
 }

@@ -10,6 +10,9 @@ import {
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { convexConfigured } from "@/lib/convex";
 import type { Player } from "@/lib/types";
 import {
   PACKAGE_ID,
@@ -54,6 +57,7 @@ export function MintButton({
   const qc = useQueryClient();
   const router = useRouter();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const refreshPool = useAction(api.sui_actions.refreshPool);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const { data: pool } = usePoolState(poolId);
@@ -121,6 +125,11 @@ export function MintButton({
         qc.invalidateQueries({ queryKey: poolStateKey(poolId) }),
         qc.invalidateQueries({ queryKey: MY_PASSES_KEY(account.address) }),
       ]);
+      // Refresh the Convex pool-state cache now so the pot updates immediately
+      // instead of waiting for the 30s poller. Best-effort.
+      if (convexConfigured) {
+        void refreshPool({ poolObjectId: poolId }).catch(() => {});
+      }
 
       setStatus({ kind: "success", digest: result.digest, passId });
 

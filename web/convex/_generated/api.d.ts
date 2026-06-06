@@ -18,6 +18,7 @@ import type * as http from "../http.js";
 import type * as matchSim from "../matchSim.js";
 import type * as matchdays from "../matchdays.js";
 import type * as passes from "../passes.js";
+import type * as poolStates from "../poolStates.js";
 import type * as rosters from "../rosters.js";
 import type * as seed from "../seed.js";
 import type * as sui_actions from "../sui_actions.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   matchSim: typeof matchSim;
   matchdays: typeof matchdays;
   passes: typeof passes;
+  poolStates: typeof poolStates;
   rosters: typeof rosters;
   seed: typeof seed;
   sui_actions: typeof sui_actions;

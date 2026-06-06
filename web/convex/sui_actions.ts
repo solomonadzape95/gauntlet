@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { action, type ActionCtx } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 /**
  * Server-side Sui event poller. Runs in a Node action so it can make outbound
@@ -197,3 +197,108 @@ async function maybeProjectEvent(
     });
   }
 }
+
+// ── Pool-state cache refresh ────────────────────────────────────────────────
+// Browsers read pool state from the `poolStates` table (reactive, free) instead
+// of calling Sui RPC from every tab. These actions do the RPC server-side and
+// upsert the snapshot.
+
+function rpcEndpoint(): string {
+  return (
+    process.env.SUI_RPC_URL ??
+    process.env.TATUM_SUI_MAINNET_RPC ??
+    "https://fullnode.mainnet.sui.io:443"
+  );
+}
+
+async function fetchPoolFields(
+  poolObjectId: string,
+): Promise<Record<string, unknown> | null> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (process.env.TATUM_API_KEY) headers["x-api-key"] = process.env.TATUM_API_KEY;
+  const res = await fetch(rpcEndpoint(), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "sui_getObject",
+      params: [poolObjectId, { showContent: true }],
+    }),
+  });
+  if (!res.ok) throw new Error(`getObject ${poolObjectId}: ${res.status}`);
+  const json = (await res.json()) as {
+    result?: { data?: { content?: { dataType?: string; fields?: Record<string, unknown> } } };
+  };
+  const content = json.result?.data?.content;
+  if (content?.dataType !== "moveObject") return null;
+  return content.fields ?? null;
+}
+
+async function refreshOnePool(ctx: ActionCtx, poolObjectId: string) {
+  const f = await fetchPoolFields(poolObjectId);
+  if (!f) return false;
+  const pot = f.pot as { fields?: { value?: string } } | string | undefined;
+  const potValue =
+    typeof pot === "object" && pot?.fields?.value
+      ? pot.fields.value
+      : typeof pot === "string"
+        ? pot
+        : "0";
+  const eliminated = ((f.eliminated_players as Array<string | number>) ?? []).map(
+    Number,
+  );
+  await ctx.runMutation(internal.poolStates.upsert, {
+    poolObjectId,
+    admin: String(f.admin ?? ""),
+    treasury: String(f.treasury ?? ""),
+    feeBps: Number(f.fee_bps ?? 0),
+    entryFeeMist: String(f.entry_fee_mist ?? "0"),
+    potMist: String(potValue),
+    netPotMist: String(f.net_pot_mist ?? "0"),
+    totalPasses: Number(f.total_passes ?? 0),
+    aliveCount: Number(f.alive_count ?? 0),
+    survivingWeight: Number(f.surviving_weight ?? 0),
+    totalWeight: Number(f.total_weight ?? 0),
+    phase: Number(f.phase ?? 0),
+    eliminatedPlayers: eliminated,
+  });
+  return true;
+}
+
+/** Cron: refresh every on-chain pool's cached snapshot. */
+export const refreshPoolStates = action({
+  args: {},
+  handler: async (ctx) => {
+    const pools = (await ctx.runQuery(api.matchdays.listAll, {})) as Array<{
+      poolObjectId?: string;
+    }>;
+    const ids = Array.from(
+      new Set(pools.map((p) => p.poolObjectId).filter((x): x is string => !!x)),
+    );
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        if (await refreshOnePool(ctx, id)) ok++;
+      } catch (e) {
+        console.warn(`[refreshPoolStates] ${id}:`, e);
+      }
+    }
+    return { refreshed: ok, total: ids.length };
+  },
+});
+
+/** On-demand refresh of a single pool — call after a mint/settle/cashout so the
+ *  cached state updates immediately instead of waiting for the next cron tick. */
+export const refreshPool = action({
+  args: { poolObjectId: v.string() },
+  handler: async (ctx, { poolObjectId }) => {
+    if (!poolObjectId || poolObjectId === "0x0") return { ok: false };
+    try {
+      const ok = await refreshOnePool(ctx, poolObjectId);
+      return { ok };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+});

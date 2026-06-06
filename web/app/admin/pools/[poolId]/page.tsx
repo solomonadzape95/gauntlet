@@ -30,7 +30,7 @@ import { grossPotFromNet, settledSurvivorPasses } from "@/lib/odds";
 
 import { cn } from "@/lib/cn";
 
-import { useMutation as useConvexMutation } from "convex/react";
+import { useMutation as useConvexMutation, useAction as useConvexAction } from "convex/react";
 import {
   fetchMatchEventsDoc,
   scheduleMatchEvents,
@@ -294,9 +294,12 @@ function ActionPanel({
     enabled: !!matchdayBlobId,
   });
 
+  const refreshPool = useConvexAction(api.sui_actions.refreshPool);
   const invalidate = async () => {
     await qc.invalidateQueries({ queryKey: poolStateKey(poolId) });
     await qc.invalidateQueries({ queryKey: mintCountsKey(poolId) });
+    // Refresh the Convex pool-state cache so the phase flip shows immediately.
+    if (convexConfigured) await refreshPool({ poolObjectId: poolId }).catch(() => {});
   };
 
   const handleLock = async () => {
