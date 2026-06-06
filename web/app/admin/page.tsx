@@ -35,6 +35,12 @@ export default function AdminDashboard() {
     api.cashouts.recent,
     convexConfigured ? { limit: 16 } : "skip",
   );
+  const stats = useQuery(
+    api.events.platformStats,
+    convexConfigured ? {} : "skip",
+  ) as
+    | { feeMist: string; grossPotMist: string; poolsSettled: number }
+    | undefined;
 
   const livePools = ((tournaments ?? []) as Array<{ status: string }>).filter(
     (t) => t.status === "live",
@@ -64,22 +70,28 @@ export default function AdminDashboard() {
       <section className="border-b border-zinc-900">
         <div className="mx-auto max-w-[110rem] px-6 lg:px-10 py-8 grid grid-cols-2 md:grid-cols-4 -ml-px -mt-px">
           <Counter
-            label="Tournaments"
-            value={tournaments === undefined ? "…" : String(tournaments.length)}
+            label="Revenue · 10% fees"
+            value={stats === undefined ? "…" : formatSui(BigInt(stats.feeMist))}
+            unit="SUI"
+            accent
+          />
+          <Counter
+            label="Settled pots (gross)"
+            value={
+              stats === undefined
+                ? "…"
+                : formatSui(BigInt(stats.grossPotMist))
+            }
+            unit="SUI"
+          />
+          <Counter
+            label="Paid to survivors"
+            value={cashouts === undefined ? "…" : formatSui(totalCashedMist)}
+            unit="SUI"
           />
           <Counter
             label="Live pools"
             value={tournaments === undefined ? "…" : String(livePools)}
-            accent
-          />
-          <Counter
-            label="Recent cashouts"
-            value={cashouts === undefined ? "…" : String(cashouts.length)}
-          />
-          <Counter
-            label="Cashed out"
-            value={cashouts === undefined ? "…" : formatSui(totalCashedMist)}
-            unit="SUI"
           />
         </div>
       </section>

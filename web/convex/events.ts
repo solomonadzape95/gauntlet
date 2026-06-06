@@ -83,6 +83,38 @@ export const forOwner = query({
   },
 });
 
+/**
+ * Platform revenue — the 10% fee skimmed to the treasury at settle. Each
+ * PoolSettled event carries `fee_mist` (and `pot_mist`, the gross pot). Summed
+ * across all settles. Returns mist as strings (bigint doesn't cross the wire
+ * cleanly). Event volume is low, so a bounded full scan is fine.
+ */
+export const platformStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("events")
+      .withIndex("by_time")
+      .order("desc")
+      .take(2000);
+    let feeMist = 0n;
+    let grossPotMist = 0n;
+    let poolsSettled = 0;
+    for (const ev of rows) {
+      if (ev.type !== "PoolSettled") continue;
+      poolsSettled++;
+      const p = ev.payload as { fee_mist?: unknown; pot_mist?: unknown };
+      feeMist += BigInt(String(p.fee_mist ?? "0"));
+      grossPotMist += BigInt(String(p.pot_mist ?? "0"));
+    }
+    return {
+      feeMist: feeMist.toString(),
+      grossPotMist: grossPotMist.toString(),
+      poolsSettled,
+    };
+  },
+});
+
 export const watermark = query({
   args: { poolObjectId: v.optional(v.string()) },
   handler: async (ctx, { poolObjectId }) => {
