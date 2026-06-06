@@ -1,8 +1,11 @@
 import type { RosterData, MatchdayData } from "./types";
 
+// Must match the network the blobs were PUBLISHED to (see the upload route).
+// Defaults to testnet to pair with the free testnet publisher; override with
+// NEXT_PUBLIC_WALRUS_AGGREGATOR if you publish to mainnet.
 const AGGREGATOR =
   process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR ??
-  "https://aggregator.walrus-mainnet.walrus.space";
+  "https://aggregator.walrus-testnet.walrus.space";
 
 export function walrusUrl(blobId: string) {
   return `${AGGREGATOR}/v1/blobs/${blobId}`;

@@ -7,10 +7,14 @@ import { NextResponse } from "next/server";
  * CORS surprises when the publisher tightens up.
  */
 
+// NOTE: Walrus blobs are just roster/result JSON — independent of the Sui
+// mainnet pool (no funds). Mysten runs NO free public mainnet publisher, so we
+// default to the public TESTNET publisher (free + reliably certifies). For
+// durable mainnet storage, run your own publisher and set WALRUS_PUBLISHER.
 const PUBLISHER =
   process.env.WALRUS_PUBLISHER ??
   process.env.NEXT_PUBLIC_WALRUS_PUBLISHER ??
-  "https://publisher.walrus-mainnet.walrus.space";
+  "https://publisher.walrus-testnet.walrus.space";
 
 interface WalrusUploadResponse {
   newlyCreated?: { blobObject: { blobId: string } };

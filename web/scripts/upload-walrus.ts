@@ -9,10 +9,12 @@
  */
 
 function publisherUrl(): string {
+  // Mysten runs no free public mainnet publisher; default to the testnet one
+  // (free + certifies). Override with NEXT_PUBLIC_WALRUS_PUBLISHER for mainnet.
   return (
     process.env.NEXT_PUBLIC_WALRUS_PUBLISHER ??
     process.env.WALRUS_PUBLISHER ??
-    "https://publisher.walrus-mainnet.walrus.space"
+    "https://publisher.walrus-testnet.walrus.space"
   );
 }
 
