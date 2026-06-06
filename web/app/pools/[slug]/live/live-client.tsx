@@ -103,6 +103,16 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
       ? { poolObjectId: poolId }
       : "skip",
   ) as { rosterBlobId?: string; matchdayResultsBlobId?: string } | null | undefined;
+
+  // Autonomous-loop state for this pool — drives the public auto-lock countdown.
+  const automation = useConvexQuery(
+    api.automation.forPool,
+    convexConfigured && poolId !== "0x0" ? { poolObjectId: poolId } : "skip",
+  ) as
+    | { enabled: boolean; status: string; lockDelayMs: number; lastMintAtMs?: number }
+    | null
+    | undefined;
+
   const rosterBlobId =
     matchdayRow?.rosterBlobId ?? poolMeta.rosterBlobId ?? "";
   const matchdayBlobId =
@@ -323,6 +333,18 @@ export function LiveClient({ pool: poolMeta }: { pool: PoolMeta }) {
           fixtureLabel={poolMeta.name}
           survivorCount={simSurvivorCount}
           totalCount={roster.players.length}
+        />
+      )}
+
+      {/* Auto-lock countdown — only while open and the loop is driving this pool. */}
+      {pool.phase === 0 && !simActive && automation?.enabled && (
+        <AutoLockBanner
+          lockAtMs={
+            automation.lastMintAtMs
+              ? automation.lastMintAtMs + automation.lockDelayMs
+              : null
+          }
+          lockDelaySec={Math.round(automation.lockDelayMs / 1000)}
         />
       )}
 
@@ -1066,6 +1088,55 @@ function SettledBanner({
  * left, fixture label in the middle, survivor counter on the right, and a
  * progress sliver at the very top showing elapsed / total.
  */
+/**
+ * Public auto-lock countdown. While the pool is open and the autonomous loop is
+ * driving it, the pool locks `lockDelay` after the LAST mint — so every new
+ * entry resets this clock. Shows the running countdown (or a "first entry"
+ * prompt when nobody's minted yet).
+ */
+function AutoLockBanner({
+  lockAtMs,
+  lockDelaySec,
+}: {
+  lockAtMs: number | null;
+  lockDelaySec: number;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const remainingSec = lockAtMs ? Math.max(0, Math.ceil((lockAtMs - now) / 1000)) : null;
+  const mmss =
+    remainingSec === null
+      ? null
+      : `${Math.floor(remainingSec / 60)}:${String(remainingSec % 60).padStart(2, "0")}`;
+
+  return (
+    <div className="sticky top-0 z-30 border-b border-hazard/40 bg-ink/85 backdrop-blur">
+      <div className="mx-auto max-w-[90rem] px-6 lg:px-12 py-3 flex items-center gap-4 flex-wrap">
+        <span className="inline-flex items-center gap-2 text-utility text-hazard">
+          <span aria-hidden className="size-2 rounded-full bg-hazard animate-pulse" />
+          AUTO
+        </span>
+        {mmss ? (
+          <span className="text-utility text-zinc-300 tabular font-mono">
+            Locks in {mmss} — each new entry resets the clock
+          </span>
+        ) : (
+          <span className="text-utility text-zinc-400">
+            Locks {lockDelaySec}s after the first entry. Get a pick in to start the clock.
+          </span>
+        )}
+        <span className="ml-auto text-utility text-zinc-500 hidden md:inline">
+          Match runs automatically · winners withdraw after settle
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SimBanner({
   elapsed,
   fixtureLabel,

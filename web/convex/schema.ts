@@ -119,6 +119,35 @@ export default defineSchema({
     addedAt: v.number(),
   }).index("by_address", ["address"]),
 
+  // Autonomous game-loop state — one row per pool the engine manages. The
+  // on-chain phase is the source of truth; this tracks the off-chain timers
+  // (lock countdown, sim window) and bookkeeping the loop needs.
+  automation: defineTable({
+    poolObjectId: v.string(),
+    tournamentSlug: v.string(),
+    mdSlug: v.string(),
+    rosterBlobId: v.optional(v.string()),
+    entryFeeMist: v.string(),
+    treasury: v.string(),
+    enabled: v.boolean(),
+    // Editable timing knobs (ms).
+    lockDelayMs: v.number(), //   last mint  → lock
+    simDelayMs: v.number(), //    lock       → sim start
+    settleDelayMs: v.number(), // sim start  → settle
+    // Lifecycle timestamps.
+    lastMintAtMs: v.optional(v.number()),
+    lockedAtMs: v.optional(v.number()),
+    simStartedAtMs: v.optional(v.number()),
+    settledAtMs: v.optional(v.number()),
+    // open | locking | locked | simming | settling | settled | spawned | error
+    status: v.string(),
+    lastError: v.optional(v.string()),
+    spawnedChildPool: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_pool", ["poolObjectId"])
+    .index("by_enabled", ["enabled"]),
+
   // Lightweight user directory derived from event sender addresses.
   users: defineTable({
     address: v.string(),

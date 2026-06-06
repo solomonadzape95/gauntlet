@@ -9,9 +9,11 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as automation from "../automation.js";
 import type * as cashouts from "../cashouts.js";
 import type * as crons from "../crons.js";
 import type * as events from "../events.js";
+import type * as gameLoop from "../gameLoop.js";
 import type * as http from "../http.js";
 import type * as matchSim from "../matchSim.js";
 import type * as matchdays from "../matchdays.js";
@@ -30,9 +32,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  automation: typeof automation;
   cashouts: typeof cashouts;
   crons: typeof crons;
   events: typeof events;
+  gameLoop: typeof gameLoop;
   http: typeof http;
   matchSim: typeof matchSim;
   matchdays: typeof matchdays;

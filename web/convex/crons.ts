@@ -1,6 +1,6 @@
 import { cronJobs } from "convex/server";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const crons = cronJobs();
 
@@ -19,6 +19,20 @@ crons.interval(
   { seconds: 30 },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (api as any).sui_actions.pollEvents,
+  {},
+);
+
+/**
+ * Autonomous game-loop tick. Advances every pool enrolled in `automation`
+ * (and `enabled`) by at most one lifecycle step per tick. No-op when nothing
+ * is enrolled, so it's cheap to leave running. The 30s cadence naturally
+ * produces the ~30s spacing between lock → sim → settle.
+ */
+crons.interval(
+  "Advance game loop",
+  { seconds: 30 },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (internal as any).gameLoop.tick,
   {},
 );
 

@@ -149,6 +149,12 @@ async function maybeProjectEvent(
     });
     await ctx.runMutation(api.users.seen, { address: sender });
     await ctx.runMutation(api.users.incrementPassCount, { address: sender });
+    // Reset the autonomous lock countdown — locks `lockDelayMs` after the last
+    // mint. No-op if this pool isn't enrolled in the game loop.
+    await ctx.runMutation(api.automation.touchMint, {
+      poolObjectId,
+      timestampMs: timestampMs || Date.now(),
+    });
   } else if (type === "PassCashedOut") {
     const passId = String(data.pass_id ?? "");
     const poolObjectId = String(data.pool_id ?? "");

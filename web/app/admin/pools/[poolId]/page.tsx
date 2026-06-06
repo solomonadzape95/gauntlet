@@ -52,6 +52,7 @@ import {
 
 import { EventsFeed } from "../../events-feed";
 import { PlayersBreakdown } from "../../players-breakdown";
+import { AutomationPanel } from "@/components/admin/automation-panel";
 
 interface MdLite {
   _id: string;
@@ -499,6 +500,8 @@ function ActionPanel({
 
   return (
     <div className="space-y-4">
+      <AutomationPanel poolId={poolId} />
+
       {pool.phase === 0 && (
         <ActionRow
           title="Lock Pool"
